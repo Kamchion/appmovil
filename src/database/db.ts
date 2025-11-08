@@ -83,7 +83,9 @@ export async function initDatabase(): Promise<void> {
         assignedVendorId TEXT,
         createdAt TEXT,
         lastSignedIn TEXT,
-        syncedAt TEXT
+        syncedAt TEXT,
+        modifiedAt TEXT,
+        needsSync INTEGER DEFAULT 0
       );
     `);
 

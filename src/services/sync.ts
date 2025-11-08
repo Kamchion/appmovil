@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase } from '../database/db';
 import { getCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
 import { getOrders } from './api-orders';
+import { updateClientOnServer } from './api-client-update';
 import { Product, PendingOrder, PendingOrderItem } from '../types';
 import { cacheMultipleImages } from './imageCache';
 import { API_BASE_URL } from './api';
@@ -142,7 +143,54 @@ export async function syncCatalog(
       });
     }
 
-    // Sincronizar clientes asignados
+    // Subir cambios de clientes modificados localmente
+    onProgress?.('Subiendo cambios de clientes...');
+    try {
+      const token = await getAuthToken();
+      if (token) {
+        const modifiedClients = await db.getAllAsync(
+          `SELECT * FROM clients WHERE needsSync = 1`
+        );
+
+        if (modifiedClients.length > 0) {
+          console.log(`🔄 Subiendo ${modifiedClients.length} clientes modificados...`);
+          
+          for (const client of modifiedClients) {
+            try {
+              await updateClientOnServer(token, client.id, {
+                name: client.name,
+                email: client.email,
+                companyName: client.companyName,
+                companyTaxId: client.companyTaxId,
+                phone: client.phone,
+                address: client.address,
+                gpsLocation: client.gpsLocation,
+                city: client.city,
+                state: client.state,
+                zipCode: client.zipCode,
+                country: client.country,
+                contactPerson: client.contactPerson,
+                priceType: client.priceType,
+              });
+
+              // Marcar como sincronizado
+              await db.runAsync(
+                `UPDATE clients SET needsSync = 0, syncedAt = ? WHERE id = ?`,
+                [now, client.id]
+              );
+
+              console.log(`✅ Cliente ${client.id} sincronizado`);
+            } catch (clientError) {
+              console.error(`❌ Error al sincronizar cliente ${client.id}:`, clientError);
+            }
+          }
+        }
+      }
+    } catch (uploadError) {
+      console.warn('⚠️ Error al subir cambios de clientes:', uploadError);
+    }
+
+    // Sincronizar clientes asignados (descargar del servidor)
     onProgress?.('Sincronizando clientes...');
     try {
       const clientsResponse = await getAssignedClients();

@@ -201,7 +201,7 @@ export default function ClientesScreen() {
       
       await db.runAsync(
         `UPDATE clients 
-         SET name = ?, companyName = ?, email = ?, phone = ?, address = ?, clientNumber = ?, priceType = ?, syncedAt = ?
+         SET name = ?, companyName = ?, email = ?, phone = ?, address = ?, clientNumber = ?, priceType = ?, modifiedAt = ?, needsSync = 1
          WHERE id = ?`,
         [
           formData.contactPerson,
