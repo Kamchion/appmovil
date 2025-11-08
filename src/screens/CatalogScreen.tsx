@@ -20,6 +20,57 @@ interface CatalogScreenProps {
   navigation: any;
 }
 
+// Componente separado para ProductCard para evitar problemas con hooks
+const ProductCard = React.memo(({ item, navigation }: { item: Product; navigation: any }) => {
+  const [imagePath, setImagePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (item?.image) {
+      getCachedImagePath(item.image).then(setImagePath).catch(() => setImagePath(null));
+    }
+  }, [item?.image]);
+
+  // Validar que item tenga los datos mínimos requeridos
+  if (!item || !item.id || !item.name || !item.sku) {
+    console.error('❌ ProductCard: Datos de producto inválidos', item);
+    return null;
+  }
+
+  return (
+    <TouchableOpacity
+      style={styles.productCard}
+      onPress={() => navigation.navigate('ProductDetail', { product: item })}
+    >
+      {imagePath ? (
+        <Image
+          source={{ uri: imagePath }}
+          style={styles.productImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={styles.productImagePlaceholder}>
+          <Text style={styles.productImagePlaceholderText}>📦</Text>
+        </View>
+      )}
+      <View style={styles.productInfo}>
+        <Text style={styles.productName} numberOfLines={2}>
+          {item.name || 'Sin nombre'}
+        </Text>
+        <Text style={styles.productSku}>SKU: {item.sku || 'N/A'}</Text>
+        {item.category && (
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
+        )}
+        <View style={styles.productPricing}>
+          <Text style={styles.productPrice}>${item.basePrice || '0.00'}</Text>
+          <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -70,8 +121,15 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         'SELECT * FROM products WHERE isActive = 1 AND hideInCatalog = 0 ORDER BY displayOrder ASC, name ASC'
       );
       console.log(`✅ ${result.length} productos cargados exitosamente`);
-      setProducts(result);
-      setFilteredProducts(result);
+      
+      // Validar que los productos tengan los campos requeridos
+      const validProducts = result.filter(p => p.id && p.sku && p.name && p.basePrice);
+      if (validProducts.length < result.length) {
+        console.warn(`⚠️ ${result.length - validProducts.length} productos inválidos filtrados`);
+      }
+      
+      setProducts(validProducts);
+      setFilteredProducts(validProducts);
       
       // Extraer categorías únicas
       const uniqueCategories = [...new Set(result.map(p => p.category).filter(c => c))].sort();
@@ -124,49 +182,9 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     setRefreshing(false);
   };
 
-  const renderProduct = ({ item }: { item: Product }) => {
-    const [imagePath, setImagePath] = useState<string | null>(null);
-
-    useEffect(() => {
-      if (item.image) {
-        getCachedImagePath(item.image).then(setImagePath);
-      }
-    }, [item.image]);
-
-    return (
-      <TouchableOpacity
-        style={styles.productCard}
-        onPress={() => navigation.navigate('ProductDetail', { product: item })}
-      >
-        {imagePath ? (
-          <Image
-            source={{ uri: imagePath }}
-            style={styles.productImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.productImagePlaceholder}>
-            <Text style={styles.productImagePlaceholderText}>📦</Text>
-          </View>
-        )}
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>
-            {item.name}
-          </Text>
-          <Text style={styles.productSku}>SKU: {item.sku}</Text>
-          {item.category && (
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{item.category}</Text>
-            </View>
-          )}
-          <View style={styles.productPricing}>
-            <Text style={styles.productPrice}>${item.basePrice}</Text>
-            <Text style={styles.productStock}>Stock: {item.stock}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderProduct = ({ item }: { item: Product }) => (
+    <ProductCard item={item} navigation={navigation} />
+  );
 
   const renderCategoryFilter = () => (
     <View style={styles.categoryFilterContainer}>

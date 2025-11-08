@@ -8,11 +8,26 @@ export interface Product {
   name: string;
   description: string | null;
   category: string | null;
+  subcategory: string | null;
   image: string | null;
   basePrice: string;
-  price: string;
+  price?: string;
   stock: number;
-  minimumQuantity: number;
+  isActive?: number | boolean;
+  displayOrder: number | null;
+  parentSku: string | null;
+  variantName: string | null;
+  dimension: string | null;
+  line1Text: string | null;
+  line2Text: string | null;
+  minQuantity: number;
+  minimumQuantity?: number;
+  location: string | null;
+  unitsPerBox: number;
+  hideInCatalog: number | boolean;
+  customText: string | null;
+  customSelect: string | null;
+  createdAt: string | null;
   updatedAt: string;
   syncedAt: string;
 }
@@ -58,14 +73,29 @@ export interface ApiCatalogResponse {
     name: string;
     description: string | null;
     category: string | null;
+    subcategory: string | null;
     image: string | null;
     basePrice: string;
     price: string;
     stock: number;
+    isActive: boolean;
+    displayOrder: number | null;
+    parentSku: string | null;
+    variantName: string | null;
+    dimension: string | null;
+    line1Text: string | null;
+    line2Text: string | null;
+    minQuantity: number;
     minimumQuantity: number;
+    location: string | null;
+    unitsPerBox: number;
+    hideInCatalog: boolean;
+    customText: string | null;
+    customSelect: string | null;
+    createdAt: string | null;
     updatedAt: string;
   }>;
-  totalProducts: number;
+  totalProducts?: number;
 }
 
 export interface ApiUploadOrdersResponse {
