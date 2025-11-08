@@ -40,7 +40,7 @@ export default function PedidosScreen({ navigation }: any) {
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showClientDialog, setShowClientDialog] = useState(false); // Cambiado a false
+  const [showClientDialog, setShowClientDialog] = useState(true); // Mostrar diálogo al entrar
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -60,67 +60,9 @@ export default function PedidosScreen({ navigation }: any) {
 
   useEffect(() => {
     loadClients();
-    checkCartAndNavigate();
-    
-    // Listener para cuando la pantalla recibe foco
-    const unsubscribe = navigation.addListener('focus', () => {
-      checkCartAndNavigate();
-    });
-    
-    return unsubscribe;
   }, []);
 
-  const checkCartAndNavigate = async () => {
-    try {
-      console.log('🛒 PedidosScreen: Verificando carrito...');
-      const cartData = await AsyncStorage.getItem('cart');
-      const cart = cartData ? JSON.parse(cartData) : [];
-      console.log(`📊 Productos en carrito: ${cart.length}`);
-      
-      if (cart.length > 0) {
-        // Hay productos en carrito, mostrar selección de cliente
-        console.log('✅ Mostrando diálogo de selección de cliente');
-        setShowClientDialog(true);
-      } else {
-        // No hay productos, verificar que hay productos en BD antes de navegar
-        console.log('⚠️ No hay productos en carrito, verificando catálogo...');
-        const db = getDatabase();
-        const countResult = await db.getAllAsync('SELECT COUNT(*) as count FROM products WHERE isActive = 1');
-        const totalProducts = countResult[0]?.count || 0;
-        
-        if (totalProducts === 0) {
-          console.error('❌ No hay productos en la base de datos');
-          Alert.alert(
-            'Sin catálogo',
-            'No hay productos disponibles. Por favor sincroniza el catálogo desde la pantalla de Inicio.',
-            [
-              {
-                text: 'Ir a Inicio',
-                onPress: () => navigation.navigate('Home')
-              }
-            ]
-          );
-          return;
-        }
-        
-        console.log(`✅ ${totalProducts} productos disponibles, navegando a catálogo...`);
-        // Usar replace para que el botón atrás funcione correctamente
-        navigation.replace('CatalogTabs');
-      }
-    } catch (error) {
-      console.error('❌ Error al verificar carrito:', error);
-      Alert.alert(
-        'Error',
-        'Ocurrió un error al verificar el carrito. Por favor intenta nuevamente.',
-        [
-          {
-            text: 'Volver',
-            onPress: () => navigation.navigate('Home')
-          }
-        ]
-      );
-    }
-  };
+
 
   useEffect(() => {
     filterClients();
@@ -170,9 +112,9 @@ export default function PedidosScreen({ navigation }: any) {
       // Cerrar diálogo
       setShowClientDialog(false);
       
-      // Volver al carrito
-      Alert.alert('✅ Cliente asignado', `${client.companyName || client.name} ha sido asignado al pedido`);
-      navigation.goBack();
+      // Navegar al catálogo para hacer el pedido
+      Alert.alert('✅ Cliente seleccionado', `Ahora puedes agregar productos para ${client.companyName || client.name}`);
+      navigation.navigate('CatalogTabs');
     } catch (error) {
       console.error('❌ Error al seleccionar cliente:', error);
       Alert.alert('Error', 'No se pudo seleccionar el cliente');

@@ -117,8 +117,13 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         return;
       }
       
+      // Filtrar productos principales (sin parentSku) y variantes ocultas
       const result = await db.getAllAsync<Product>(
-        'SELECT * FROM products WHERE isActive = 1 AND hideInCatalog = 0 ORDER BY displayOrder ASC, name ASC'
+        `SELECT * FROM products 
+         WHERE isActive = 1 
+         AND hideInCatalog = 0 
+         AND (parentSku IS NULL OR parentSku = '') 
+         ORDER BY displayOrder ASC, name ASC`
       );
       console.log(`✅ ${result.length} productos cargados exitosamente`);
       

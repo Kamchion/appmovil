@@ -27,7 +27,7 @@ export default function ProductDetailScreen({
   navigation,
 }: ProductDetailScreenProps) {
   const { product } = route.params;
-  const [quantity, setQuantity] = useState(product.minimumQuantity.toString());
+  const [quantity, setQuantity] = useState((product.minQuantity || product.minimumQuantity || 1).toString());
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -45,10 +45,11 @@ export default function ProductDetailScreen({
   const handleAddToCart = async () => {
     const qty = parseInt(quantity);
 
-    if (isNaN(qty) || qty < product.minimumQuantity) {
+    const minQty = product.minQuantity || product.minimumQuantity || 1;
+    if (isNaN(qty) || qty < minQty) {
       Alert.alert(
         'Cantidad inválida',
-        `La cantidad mínima es ${product.minimumQuantity}`
+        `La cantidad mínima es ${minQty}`
       );
       return;
     }
@@ -90,7 +91,8 @@ export default function ProductDetailScreen({
   const decrementQuantity = () => {
     const current = parseInt(quantity) || 0;
     const newQty = current - 1;
-    if (newQty >= product.minimumQuantity) {
+    const minQty = product.minQuantity || product.minimumQuantity || 1;
+    if (newQty >= minQty) {
       setQuantity(newQty.toString());
     }
   };
@@ -116,8 +118,8 @@ export default function ProductDetailScreen({
         )}
 
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>${product.price}</Text>
-          <Text style={styles.stock}>Stock: {product.stock}</Text>
+          <Text style={styles.price}>${product.price || product.basePrice}</Text>
+          <Text style={styles.stock}>Stock: {product.stock || 0}</Text>
         </View>
 
         {product.description && (
@@ -130,7 +132,7 @@ export default function ProductDetailScreen({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cantidad</Text>
           <Text style={styles.minimumNote}>
-            Cantidad mínima: {product.minimumQuantity}
+            Cantidad mínima: {product.minQuantity || product.minimumQuantity || 1}
           </Text>
 
           <View style={styles.quantityContainer}>
@@ -160,7 +162,7 @@ export default function ProductDetailScreen({
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Total:</Text>
           <Text style={styles.totalAmount}>
-            ${(parseFloat(product.price) * (parseInt(quantity) || 0)).toFixed(2)}
+            ${(parseFloat(product.price || product.basePrice) * (parseInt(quantity) || 0)).toFixed(2)}
           </Text>
         </View>
 
