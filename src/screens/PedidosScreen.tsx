@@ -40,7 +40,7 @@ export default function PedidosScreen({ navigation }: any) {
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showClientDialog, setShowClientDialog] = useState(true);
+  const [showClientDialog, setShowClientDialog] = useState(false); // Cambiado a false
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -60,6 +60,23 @@ export default function PedidosScreen({ navigation }: any) {
 
   useEffect(() => {
     loadClients();
+    
+    // Si viene desde el carrito (para asignar cliente), mostrar diálogo
+    // Si es navegación directa desde tab, ir al catálogo
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Verificar si hay productos en el carrito
+      AsyncStorage.getItem('cart').then(cartData => {
+        if (cartData && JSON.parse(cartData).length > 0) {
+          // Hay productos en carrito, mostrar selección de cliente
+          setShowClientDialog(true);
+        } else {
+          // No hay productos, ir directo al catálogo
+          navigation.navigate('CatalogTabs');
+        }
+      });
+    });
+    
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -107,16 +124,12 @@ export default function PedidosScreen({ navigation }: any) {
       await AsyncStorage.setItem('selectedClientId', client.id.toString());
       await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
       
-      // Cerrar diálogo primero
+      // Cerrar diálogo
       setShowClientDialog(false);
       
-      // Navegar al catálogo después de un pequeño delay
-      setTimeout(() => {
-        navigation.navigate('CatalogTabs', { 
-          clientId: client.id,
-          clientName: client.companyName || client.name
-        });
-      }, 100);
+      // Volver al carrito
+      Alert.alert('✅ Cliente asignado', `${client.companyName || client.name} ha sido asignado al pedido`);
+      navigation.goBack();
     } catch (error) {
       console.error('❌ Error al seleccionar cliente:', error);
       Alert.alert('Error', 'No se pudo seleccionar el cliente');

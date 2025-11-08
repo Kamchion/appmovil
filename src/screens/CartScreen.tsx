@@ -8,6 +8,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from '../types';
 import {
   getCart,
@@ -24,12 +25,17 @@ interface CartScreenProps {
 export default function CartScreen({ navigation }: CartScreenProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
 
   useEffect(() => {
     loadCart();
+    loadSelectedClient();
     
     // Recargar carrito cuando la pantalla recibe foco
-    const unsubscribe = navigation.addListener('focus', loadCart);
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadCart();
+      loadSelectedClient();
+    });
     return unsubscribe;
   }, [navigation]);
 
@@ -37,6 +43,17 @@ export default function CartScreen({ navigation }: CartScreenProps) {
     const currentCart = await getCart();
     setCart(currentCart);
     setLoading(false);
+  };
+
+  const loadSelectedClient = async () => {
+    try {
+      const clientData = await AsyncStorage.getItem('selectedClientData');
+      if (clientData) {
+        setSelectedClient(JSON.parse(clientData));
+      }
+    } catch (error) {
+      console.error('Error al cargar cliente seleccionado:', error);
+    }
   };
 
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
@@ -86,7 +103,30 @@ export default function CartScreen({ navigation }: CartScreenProps) {
       return;
     }
 
-    navigation.navigate('Checkout', { cart });
+    // Validar que haya un cliente asignado
+    if (!selectedClient) {
+      Alert.alert(
+        'Cliente no asignado',
+        '¿Deseas asignar un cliente a este pedido?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          },
+          {
+            text: 'Asignar Cliente',
+            onPress: () => navigation.navigate('Pedidos')
+          }
+        ]
+      );
+      return;
+    }
+
+    navigation.navigate('Checkout', { cart, client: selectedClient });
+  };
+
+  const handleAssignClient = () => {
+    navigation.navigate('Pedidos');
   };
 
   const renderCartItem = ({ item }: { item: CartItem }) => (
@@ -179,6 +219,29 @@ export default function CartScreen({ navigation }: CartScreenProps) {
       />
 
       <View style={styles.footer}>
+        {/* Sección de cliente asignado */}
+        <View style={styles.clientSection}>
+          {selectedClient ? (
+            <View style={styles.clientInfo}>
+              <Text style={styles.clientLabel}>👤 Cliente:</Text>
+              <Text style={styles.clientName}>{selectedClient.companyName || selectedClient.name}</Text>
+              <TouchableOpacity 
+                style={styles.changeClientBtn}
+                onPress={handleAssignClient}
+              >
+                <Text style={styles.changeClientText}>Cambiar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.assignClientBtn}
+              onPress={handleAssignClient}
+            >
+              <Text style={styles.assignClientText}>👤 Asignar Cliente</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal:</Text>
           <Text style={styles.totalValue}>${subtotal.toFixed(2)}</Text>
@@ -342,6 +405,55 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2563eb',
+  },
+  clientSection: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  clientInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f1f5f9',
+    padding: 12,
+    borderRadius: 8,
+  },
+  clientLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    marginRight: 8,
+  },
+  clientName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  changeClientBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+  },
+  changeClientText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  assignClientBtn: {
+    backgroundColor: '#10b981',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  assignClientText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   checkoutButton: {
     backgroundColor: '#2563eb',
