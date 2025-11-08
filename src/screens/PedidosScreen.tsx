@@ -100,22 +100,27 @@ export default function PedidosScreen({ navigation }: any) {
   };
 
   const handleSelectClient = async (client: Client) => {
-    // Guardar cliente seleccionado
-    await AsyncStorage.setItem('selectedClientId', client.id.toString());
-    await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
-    
-    setShowClientDialog(false);
-    
-    // Navegar al catálogo con el cliente seleccionado
-    navigation.navigate('CatalogTabs', { 
-      screen: 'CatalogTab',
-      params: { clientId: client.id }
-    });
-    
-    Alert.alert(
-      'Cliente seleccionado',
-      `Ahora puedes crear un pedido para ${client.companyName || client.name}`
-    );
+    try {
+      console.log('👤 Cliente seleccionado:', client.id, client.companyName);
+      
+      // Guardar cliente seleccionado
+      await AsyncStorage.setItem('selectedClientId', client.id.toString());
+      await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
+      
+      // Cerrar diálogo primero
+      setShowClientDialog(false);
+      
+      // Navegar al catálogo después de un pequeño delay
+      setTimeout(() => {
+        navigation.navigate('CatalogTabs', { 
+          clientId: client.id,
+          clientName: client.companyName || client.name
+        });
+      }, 100);
+    } catch (error) {
+      console.error('❌ Error al seleccionar cliente:', error);
+      Alert.alert('Error', 'No se pudo seleccionar el cliente');
+    }
   };
 
   const handleGetLocation = async () => {

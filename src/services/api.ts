@@ -331,9 +331,9 @@ export async function getAssignedClients(): Promise<{
     throw new Error('No hay sesión activa');
   }
 
-  console.log('👥 Descargando clientes...');
+  console.log('👥 Descargando clientes asignados al vendedor...');
   
-  const response = await fetch(`${TRPC_BASE_URL}/sync.getClients?batch=1`, {
+  const response = await fetch(`${TRPC_BASE_URL}/sync.getAssignedClients?batch=1`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -343,8 +343,8 @@ export async function getAssignedClients(): Promise<{
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('❌ Error getClients:', response.status, errorText);
-    throw new Error(`HTTP error! status: ${response.status}`);
+    console.error('❌ Error getAssignedClients:', response.status, errorText);
+    throw new Error(`HTTP error al obtener clientes asignados! status: ${response.status}`);
   }
 
   const data = await response.json();
