@@ -60,24 +60,38 @@ export default function PedidosScreen({ navigation }: any) {
 
   useEffect(() => {
     loadClients();
+    checkCartAndNavigate();
     
-    // Si viene desde el carrito (para asignar cliente), mostrar diálogo
-    // Si es navegación directa desde tab, ir al catálogo
+    // Listener para cuando la pantalla recibe foco
     const unsubscribe = navigation.addListener('focus', () => {
-      // Verificar si hay productos en el carrito
-      AsyncStorage.getItem('cart').then(cartData => {
-        if (cartData && JSON.parse(cartData).length > 0) {
-          // Hay productos en carrito, mostrar selección de cliente
-          setShowClientDialog(true);
-        } else {
-          // No hay productos, ir directo al catálogo
-          navigation.navigate('CatalogTabs');
-        }
-      });
+      checkCartAndNavigate();
     });
     
     return unsubscribe;
   }, []);
+
+  const checkCartAndNavigate = async () => {
+    try {
+      const cartData = await AsyncStorage.getItem('cart');
+      const cart = cartData ? JSON.parse(cartData) : [];
+      
+      if (cart.length > 0) {
+        // Hay productos en carrito, mostrar selección de cliente
+        setShowClientDialog(true);
+      } else {
+        // No hay productos, ir directo al catálogo con delay
+        setTimeout(() => {
+          navigation.navigate('CatalogTabs');
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error al verificar carrito:', error);
+      // En caso de error, ir al catálogo
+      setTimeout(() => {
+        navigation.navigate('CatalogTabs');
+      }, 100);
+    }
+  };
 
   useEffect(() => {
     filterClients();
