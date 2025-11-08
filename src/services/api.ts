@@ -3,7 +3,7 @@ import { ApiCatalogResponse, ApiUploadOrdersResponse } from '../types';
 
 /**
  * Servicio de API para comunicación con el backend
- * Maneja autenticación y sincronización
+ * Maneja autenticación y sincronización con tRPC
  */
 
 export const API_BASE_URL = 'https://manus-store-production.up.railway.app';
@@ -30,16 +30,49 @@ export async function setAuthToken(token: string): Promise<void> {
  */
 export async function clearAuthToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
-  await AsyncStorage.removeItem('vendor_user');
-  await AsyncStorage.removeItem('vendor_credentials');
 }
 
 /**
- * Realiza una petición HTTP con autenticación
+ * Parsea la respuesta de tRPC que puede venir en formato batch o individual
  */
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
+function parseTRPCResponse(data: any): any {
+  console.log('📦 Raw tRPC Response:', JSON.stringify(data).substring(0, 500));
+  
+  // Si es un array (batch mode)
+  if (Array.isArray(data)) {
+    const firstItem = data[0];
+    if (firstItem?.result?.data?.json) {
+      console.log('✅ Parsed batch response (json)');
+      return firstItem.result.data.json;
+    }
+    if (firstItem?.result?.data) {
+      console.log('✅ Parsed batch response (data)');
+      return firstItem.result.data;
+    }
+    console.log('⚠️ Returning raw batch array');
+    return firstItem || data;
+  }
+  
+  // Si es un objeto (non-batch mode)
+  if (data?.result?.data?.json) {
+    console.log('✅ Parsed object response (json)');
+    return data.result.data.json;
+  }
+  if (data?.result?.data) {
+    console.log('✅ Parsed object response (data)');
+    return data.result.data;
+  }
+  
+  console.log('⚠️ Returning raw response');
+  return data;
+}
+
+/**
+ * Realiza una petición tRPC query (GET)
+ */
+async function trpcQuery<T>(
+  procedure: string,
+  input?: any
 ): Promise<T> {
   const token = await getAuthToken();
   
@@ -47,36 +80,155 @@ async function apiRequest<T>(
     throw new Error('No hay sesión activa. Por favor inicia sesión.');
   }
 
-  const response = await fetch(`${TRPC_BASE_URL}/${endpoint}`, {
-    ...options,
+  // Construir URL con batch=1 para formato consistente
+  let url = `${TRPC_BASE_URL}/${procedure}?batch=1`;
+  
+  // Si hay input, agregarlo como query parameter
+  if (input !== undefined) {
+    const inputParam = encodeURIComponent(JSON.stringify({ "0": { json: input } }));
+    url += `&input=${inputParam}`;
+  }
+
+  console.log('🔵 tRPC Query:', procedure);
+  console.log('🔗 URL:', url.substring(0, 150) + '...');
+
+  const response = await fetch(url, {
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
-      ...options.headers,
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Error HTTP: ${response.status}`);
+    const errorText = await response.text();
+    console.error('❌ tRPC Error:', response.status, errorText);
+    throw new Error(`Error HTTP ${response.status}: ${errorText}`);
   }
 
-  return await response.json();
+  const data = await response.json();
+  return parseTRPCResponse(data);
+}
+
+/**
+ * Realiza una petición tRPC mutation (POST)
+ */
+async function trpcMutation<T>(
+  procedure: string,
+  input: any
+): Promise<T> {
+  const token = await getAuthToken();
+  
+  if (!token) {
+    throw new Error('No hay sesión activa. Por favor inicia sesión.');
+  }
+
+  console.log('🟢 tRPC Mutation:', procedure);
+
+  const response = await fetch(`${TRPC_BASE_URL}/${procedure}?batch=1`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ "0": { json: input } }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ tRPC Mutation Error:', response.status, errorText);
+    throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  return parseTRPCResponse(data);
+}
+
+/**
+ * Inicia sesión con usuario y contraseña
+ */
+export async function login(
+  username: string,
+  password: string
+): Promise<{
+  success: boolean;
+  token: string;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    name: string;
+    role: string;
+  };
+}> {
+  console.log('🔐 Attempting login for:', username);
+  
+  const response = await fetch(`${TRPC_BASE_URL}/vendorAuth.login?batch=1`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ "0": { json: { username, password } } }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Login Error:', response.status, errorText);
+    throw new Error(`Error de login: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const result = parseTRPCResponse(data);
+  
+  if (!result.success || !result.token) {
+    throw new Error('Respuesta de login inválida');
+  }
+
+  // Guardar token
+  await setAuthToken(result.token);
+  console.log('✅ Login successful, token saved');
+
+  return result;
 }
 
 /**
  * Descarga el catálogo completo de productos
  */
-export async function downloadCatalog(
+export async function getCatalog(
   lastSyncTimestamp?: string
 ): Promise<ApiCatalogResponse> {
-  const params = lastSyncTimestamp
-    ? `?input=${encodeURIComponent(JSON.stringify({ lastSyncTimestamp }))}`
-    : '';
+  const token = await getAuthToken();
   
-  return await apiRequest<ApiCatalogResponse>(
-    `sync.getCatalog${params}`,
-    { method: 'GET' }
-  );
+  if (!token) {
+    throw new Error('No hay sesión activa');
+  }
+
+  console.log('🔄 Descargando catálogo...');
+  
+  const response = await fetch(`${TRPC_BASE_URL}/sync.getCatalog?batch=1`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Error getCatalog:', response.status, errorText);
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('📦 Response length:', JSON.stringify(data).length);
+  
+  // Parsear respuesta tRPC batch
+  if (Array.isArray(data) && data[0]?.result?.data?.json) {
+    const result = data[0].result.data.json;
+    console.log('✅ Catálogo descargado:', result.products?.length || 0, 'productos');
+    return result;
+  }
+  
+  throw new Error('Formato de respuesta inesperado');
 }
 
 /**
@@ -94,12 +246,9 @@ export async function uploadPendingOrders(
     createdAtOffline: string;
   }>
 ): Promise<ApiUploadOrdersResponse> {
-  return await apiRequest<ApiUploadOrdersResponse>(
+  return await trpcMutation<ApiUploadOrdersResponse>(
     'sync.uploadOrders',
-    {
-      method: 'POST',
-      body: JSON.stringify({ orders }),
-    }
+    { orders }
   );
 }
 
@@ -109,11 +258,9 @@ export async function uploadPendingOrders(
 export async function getChanges(
   lastSyncTimestamp: string
 ): Promise<ApiCatalogResponse> {
-  const params = `?input=${encodeURIComponent(JSON.stringify({ lastSyncTimestamp }))}`;
-  
-  return await apiRequest<ApiCatalogResponse>(
-    `sync.getChanges${params}`,
-    { method: 'GET' }
+  return await trpcQuery<ApiCatalogResponse>(
+    'sync.getChanges',
+    { lastSyncTimestamp }
   );
 }
 
@@ -135,10 +282,7 @@ export async function getSyncStatus(): Promise<{
   };
   pendingOrders: number;
 }> {
-  return await apiRequest(
-    'sync.getStatus',
-    { method: 'GET' }
-  );
+  return await trpcQuery('sync.getStatus');
 }
 
 /**
@@ -147,17 +291,61 @@ export async function getSyncStatus(): Promise<{
 export async function getAssignedClients(): Promise<{
   success: boolean;
   clients: Array<{
-    id: number;
+    id: string;
     name: string;
-    email: string;
-    phone: string;
-    address: string;
-    priceType: string;
+    email?: string;
+    role?: string;
+    companyName?: string;
+    companyTaxId?: string;
+    phone?: string;
+    address?: string;
+    gpsLocation?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+    isActive?: boolean;
+    username?: string;
+    contactPerson?: string;
+    status?: string;
+    agentNumber?: string;
+    clientNumber?: string;
+    priceType?: string;
+    assignedVendorId?: string;
+    createdAt?: string;
+    lastSignedIn?: string;
   }>;
 }> {
-  const params = `?input=${encodeURIComponent(JSON.stringify({}))}`;  
-  return await apiRequest(
-    `sync.getClients${params}`,
-    { method: 'GET' }
-  );
+  const token = await getAuthToken();
+  
+  if (!token) {
+    throw new Error('No hay sesión activa');
+  }
+
+  console.log('👥 Descargando clientes...');
+  
+  const response = await fetch(`${TRPC_BASE_URL}/sync.getClients?batch=1`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Error getClients:', response.status, errorText);
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  // Parsear respuesta tRPC batch
+  if (Array.isArray(data) && data[0]?.result?.data?.json) {
+    const result = data[0].result.data.json;
+    console.log('✅ Clientes descargados:', result.clients?.length || 0);
+    return result;
+  }
+  
+  throw new Error('Formato de respuesta inesperado');
 }

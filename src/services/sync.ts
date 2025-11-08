@@ -92,19 +92,34 @@ export async function syncCatalog(
     for (const product of response.products) {
       await db.runAsync(
         `INSERT OR REPLACE INTO products 
-         (id, sku, name, description, category, image, basePrice, price, stock, minimumQuantity, updatedAt, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, sku, name, description, category, subcategory, image, basePrice, stock, isActive,
+          displayOrder, parentSku, variantName, dimension, line1Text, line2Text, minQuantity,
+          location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id,
           product.sku,
           product.name,
-          product.description,
-          product.category,
-          product.image,
+          product.description || null,
+          product.category || null,
+          product.subcategory || null,
+          product.image || null,
           product.basePrice,
-          product.price,
-          product.stock,
-          product.minimumQuantity,
+          product.stock || 0,
+          product.isActive !== undefined ? (product.isActive ? 1 : 0) : 1,
+          product.displayOrder || null,
+          product.parentSku || null,
+          product.variantName || null,
+          product.dimension || null,
+          product.line1Text || null,
+          product.line2Text || null,
+          product.minQuantity || 1,
+          product.location || null,
+          product.unitsPerBox || 0,
+          product.hideInCatalog !== undefined ? (product.hideInCatalog ? 1 : 0) : 0,
+          product.customText || null,
+          product.customSelect || null,
+          product.createdAt || null,
           product.updatedAt,
           now,
         ]
@@ -134,19 +149,34 @@ export async function syncCatalog(
         for (const client of clientsResponse.clients) {
           await db.runAsync(
             `INSERT OR REPLACE INTO clients 
-             (id, name, companyName, email, phone, address, city, state, clientNumber, isActive, syncedAt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, name, email, role, companyName, companyTaxId, phone, address, gpsLocation, 
+              city, state, zipCode, country, isActive, username, contactPerson, status, 
+              agentNumber, clientNumber, priceType, assignedVendorId, createdAt, lastSignedIn, syncedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               client.id,
               client.name || null,
-              client.companyName || null,
               client.email || null,
+              client.role || 'cliente',
+              client.companyName || null,
+              client.companyTaxId || null,
               client.phone || null,
               client.address || null,
+              client.gpsLocation || null,
               client.city || null,
               client.state || null,
-              client.clientNumber || null,
+              client.zipCode || null,
+              client.country || null,
               client.isActive ? 1 : 0,
+              client.username || null,
+              client.contactPerson || null,
+              client.status || 'active',
+              client.agentNumber || null,
+              client.clientNumber || null,
+              client.priceType || 'ciudad',
+              client.assignedVendorId || null,
+              client.createdAt || null,
+              client.lastSignedIn || null,
               now,
             ]
           );

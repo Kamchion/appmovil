@@ -68,22 +68,43 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     setRefreshing(false);
   };
 
-  const renderProduct = ({ item }: { item: Product }) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => navigation.navigate('ProductDetail', { product: item })}
-    >
-      <View style={styles.productInfo}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productSku}>SKU: {item.sku}</Text>
-        <Text style={styles.productCategory}>{item.category || 'Sin categoría'}</Text>
-      </View>
-      <View style={styles.productPricing}>
-        <Text style={styles.productPrice}>${item.price}</Text>
-        <Text style={styles.productStock}>Stock: {item.stock}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderProduct = ({ item }: { item: Product }) => {
+    const [imagePath, setImagePath] = useState<string | null>(null);
+
+    useEffect(() => {
+      if (item.image) {
+        getCachedImagePath(item.image).then(setImagePath);
+      }
+    }, [item.image]);
+
+    return (
+      <TouchableOpacity
+        style={styles.productCard}
+        onPress={() => navigation.navigate('ProductDetail', { product: item })}
+      >
+        {imagePath ? (
+          <Image
+            source={{ uri: imagePath }}
+            style={styles.productImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.productImagePlaceholder}>
+            <Text style={styles.productImagePlaceholderText}>📦</Text>
+          </View>
+        )}
+        <View style={styles.productInfo}>
+          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productSku}>SKU: {item.sku}</Text>
+          <Text style={styles.productCategory}>{item.category || 'Sin categoría'}</Text>
+          <View style={styles.productPricing}>
+            <Text style={styles.productPrice}>${item.price}</Text>
+            <Text style={styles.productStock}>Stock: {item.stock}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -200,18 +221,36 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
+  productImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  productImagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productImagePlaceholderText: {
+    fontSize: 32,
+  },
   productInfo: {
     flex: 1,
+    justifyContent: 'space-between',
   },
   productName: {
     fontSize: 16,
@@ -229,7 +268,10 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   productPricing: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
   },
   productPrice: {
     fontSize: 18,
