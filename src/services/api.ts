@@ -220,14 +220,23 @@ export async function getCatalog(
 
   const data = await response.json();
   console.log('📦 Response length:', JSON.stringify(data).length);
+  console.log('📦 Response preview:', JSON.stringify(data).substring(0, 200));
   
   // Parsear respuesta tRPC batch
   if (Array.isArray(data) && data[0]?.result?.data?.json) {
     const result = data[0].result.data.json;
     console.log('✅ Catálogo descargado:', result.products?.length || 0, 'productos');
-    return result;
+    
+    // Asegurar que tenga todos los campos requeridos
+    return {
+      success: result.success !== undefined ? result.success : true,
+      timestamp: result.timestamp || new Date().toISOString(),
+      products: result.products || [],
+      totalProducts: result.totalProducts || result.products?.length || 0,
+    };
   }
   
+  console.error('❌ Formato de respuesta inesperado:', data);
   throw new Error('Formato de respuesta inesperado');
 }
 
@@ -339,13 +348,20 @@ export async function getAssignedClients(): Promise<{
   }
 
   const data = await response.json();
+  console.log('📦 Clients response preview:', JSON.stringify(data).substring(0, 200));
   
   // Parsear respuesta tRPC batch
   if (Array.isArray(data) && data[0]?.result?.data?.json) {
     const result = data[0].result.data.json;
     console.log('✅ Clientes descargados:', result.clients?.length || 0);
-    return result;
+    
+    // Asegurar que tenga todos los campos requeridos
+    return {
+      success: result.success !== undefined ? result.success : true,
+      clients: result.clients || [],
+    };
   }
   
+  console.error('❌ Formato de respuesta inesperado:', data);
   throw new Error('Formato de respuesta inesperado');
 }

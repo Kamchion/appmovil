@@ -1,7 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase } from '../database/db';
-import { downloadCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
+import { getCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
 import { Product, PendingOrder, PendingOrderItem } from '../types';
 import { cacheMultipleImages } from './imageCache';
 import { API_BASE_URL } from './api';
@@ -78,7 +78,7 @@ export async function syncCatalog(
     // Descargar catálogo (completo o incremental)
     const response = lastSync
       ? await getChanges(lastSync)
-      : await downloadCatalog();
+      : await getCatalog();
 
     if (!response.success) {
       throw new Error('Error al descargar catálogo');
