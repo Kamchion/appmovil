@@ -15,14 +15,29 @@ import { getDatabase } from '../database/db';
 import { Product } from '../types';
 import { syncCatalog, checkConnection } from '../services/sync';
 import { getCachedImagePath } from '../services/imageCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface CatalogScreenProps {
   navigation: any;
 }
 
 // Componente separado para ProductCard para evitar problemas con hooks
-const ProductCard = React.memo(({ item, navigation }: { item: Product; navigation: any }) => {
+const ProductCard = React.memo(({ item, navigation, priceType }: { item: Product; navigation: any; priceType?: string }) => {
   const [imagePath, setImagePath] = useState<string | null>(null);
+  
+  // Calcular precio según tipo de cliente
+  const getPrice = () => {
+    if (!priceType || priceType === 'ciudad') {
+      return item.price || item.basePrice;
+    } else if (priceType === 'interior') {
+      return item.interiorPrice || item.price || item.basePrice;
+    } else if (priceType === 'especial') {
+      return item.specialPrice || item.price || item.basePrice;
+    }
+    return item.basePrice;
+  };
+  
+  const displayPrice = getPrice();
 
   useEffect(() => {
     if (item?.image) {
@@ -63,7 +78,7 @@ const ProductCard = React.memo(({ item, navigation }: { item: Product; navigatio
           </View>
         )}
         <View style={styles.productPricing}>
-          <Text style={styles.productPrice}>${item.basePrice || '0.00'}</Text>
+          <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
           <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
       </View>
@@ -80,11 +95,26 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [isOnline, setIsOnline] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedClient, setSelectedClient] = useState<any>(null);
 
   useEffect(() => {
+    loadSelectedClient();
     loadProducts();
     checkConnectionStatus();
   }, []);
+  
+  const loadSelectedClient = async () => {
+    try {
+      const clientData = await AsyncStorage.getItem('selectedClientData');
+      if (clientData) {
+        const client = JSON.parse(clientData);
+        setSelectedClient(client);
+        console.log('👤 Cliente seleccionado:', client.companyName, '- Tipo:', client.priceType);
+      }
+    } catch (error) {
+      console.error('❌ Error al cargar cliente seleccionado:', error);
+    }
+  };
 
   useEffect(() => {
     filterProducts();
@@ -188,7 +218,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   };
 
   const renderProduct = ({ item }: { item: Product }) => (
-    <ProductCard item={item} navigation={navigation} />
+    <ProductCard item={item} navigation={navigation} priceType={selectedClient?.priceType} />
   );
 
   const renderCategoryFilter = () => (
