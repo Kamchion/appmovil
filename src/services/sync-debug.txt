@@ -1,0 +1,19 @@
+DIAGNÓSTICO DE SINCRONIZACIÓN
+
+El código de syncCatalog parece correcto:
+- ✓ Usa INSERT OR REPLACE
+- ✓ Verifica response.products
+- ✓ Tiene try-catch
+- ✓ Retorna success: true
+
+PROBLEMA IDENTIFICADO:
+El app dice que descargó 50 productos pero al hacer click en "Pedidos" → "CatalogTabs" se crashea.
+
+POSIBLES CAUSAS:
+1. Los productos se descargan pero NO se guardan en SQLite (error silencioso en el INSERT)
+2. Los productos se guardan pero con datos NULL/inválidos que causan crash al renderizar
+3. El crash ocurre ANTES de llegar al catálogo (en la navegación)
+4. Error en la query SELECT * FROM products que se ejecuta en CatalogScreen
+
+SOLUCIÓN:
+Agregar logging detallado y validación de datos antes del INSERT para identificar exactamente dónde falla.

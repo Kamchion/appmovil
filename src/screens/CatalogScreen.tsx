@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  TextInput,
+  Image,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { Product } from '../types';
 import { syncCatalog, checkConnection } from '../services/sync';
-import { Image } from 'react-native';
 import { getCachedImagePath } from '../services/imageCache';
 
 interface CatalogScreenProps {
@@ -21,14 +22,22 @@ interface CatalogScreenProps {
 
 export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   useEffect(() => {
     loadProducts();
     checkConnectionStatus();
   }, []);
+
+  useEffect(() => {
+    filterProducts();
+  }, [searchQuery, selectedCategory, products]);
 
   const checkConnectionStatus = async () => {
     const online = await checkConnection();
@@ -37,17 +46,64 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
   const loadProducts = async () => {
     try {
+      console.log('📱 CatalogScreen: Cargando productos desde SQLite...');
       const db = getDatabase();
+      
+      // Primero verificar cuántos hay
+      const countResult = await db.getAllAsync('SELECT COUNT(*) as count FROM products');
+      const totalProducts = countResult[0]?.count || 0;
+      console.log(`📊 Total de productos en BD: ${totalProducts}`);
+      
+      if (totalProducts === 0) {
+        console.warn('⚠️ No hay productos en la base de datos');
+        Alert.alert(
+          'Sin productos',
+          'No se encontraron productos. Por favor sincroniza desde la pantalla de Inicio.',
+          [{ text: 'OK' }]
+        );
+        setProducts([]);
+        setFilteredProducts([]);
+        return;
+      }
+      
       const result = await db.getAllAsync<Product>(
-        'SELECT * FROM products ORDER BY name ASC'
+        'SELECT * FROM products WHERE isActive = 1 AND hideInCatalog = 0 ORDER BY displayOrder ASC, name ASC'
       );
+      console.log(`✅ ${result.length} productos cargados exitosamente`);
       setProducts(result);
+      setFilteredProducts(result);
+      
+      // Extraer categorías únicas
+      const uniqueCategories = [...new Set(result.map(p => p.category).filter(c => c))].sort();
+      setCategories(uniqueCategories as string[]);
     } catch (error) {
-      console.error('Error al cargar productos:', error);
-      Alert.alert('Error', 'No se pudieron cargar los productos');
+      console.error('❌ Error al cargar productos:', error);
+      Alert.alert('Error', 'No se pudieron cargar los productos: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterProducts = () => {
+    let filtered = [...products];
+
+    // Filtrar por búsqueda
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (product) =>
+          product.name?.toLowerCase().includes(query) ||
+          product.sku?.toLowerCase().includes(query) ||
+          product.description?.toLowerCase().includes(query)
+      );
+    }
+
+    // Filtrar por categoría
+    if (selectedCategory) {
+      filtered = filtered.filter((product) => product.category === selectedCategory);
+    }
+
+    setFilteredProducts(filtered);
   };
 
   const handleSync = async () => {
@@ -94,17 +150,63 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
           </View>
         )}
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productName} numberOfLines={2}>
+            {item.name}
+          </Text>
           <Text style={styles.productSku}>SKU: {item.sku}</Text>
-          <Text style={styles.productCategory}>{item.category || 'Sin categoría'}</Text>
+          {item.category && (
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{item.category}</Text>
+            </View>
+          )}
           <View style={styles.productPricing}>
-            <Text style={styles.productPrice}>${item.price}</Text>
+            <Text style={styles.productPrice}>${item.basePrice}</Text>
             <Text style={styles.productStock}>Stock: {item.stock}</Text>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
+
+  const renderCategoryFilter = () => (
+    <View style={styles.categoryFilterContainer}>
+      <TouchableOpacity
+        style={[
+          styles.categoryFilterButton,
+          !selectedCategory && styles.categoryFilterButtonActive,
+        ]}
+        onPress={() => setSelectedCategory('')}
+      >
+        <Text
+          style={[
+            styles.categoryFilterText,
+            !selectedCategory && styles.categoryFilterTextActive,
+          ]}
+        >
+          Todas
+        </Text>
+      </TouchableOpacity>
+      {categories.map((category) => (
+        <TouchableOpacity
+          key={category}
+          style={[
+            styles.categoryFilterButton,
+            selectedCategory === category && styles.categoryFilterButtonActive,
+          ]}
+          onPress={() => setSelectedCategory(category)}
+        >
+          <Text
+            style={[
+              styles.categoryFilterText,
+              selectedCategory === category && styles.categoryFilterTextActive,
+            ]}
+          >
+            {category}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   if (loading) {
     return (
@@ -117,51 +219,66 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Catálogo</Text>
-          <Text style={styles.headerSubtitle}>
-            {products.length} productos disponibles
-          </Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Catálogo</Text>
+            <Text style={styles.headerSubtitle}>
+              {filteredProducts.length} de {products.length} productos
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
+            <Text style={styles.statusText}>
+              {isOnline ? '🌐 Online' : '📱 Offline'}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.statusBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
-          <Text style={styles.statusText}>
-            {isOnline ? '🌐 Online' : '📱 Offline'}
-          </Text>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar por nombre, SKU o descripción..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.clearButton}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* Category Filters */}
+        {categories.length > 0 && renderCategoryFilter()}
       </View>
 
-      {products.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No hay productos</Text>
-          <Text style={styles.emptySubtext}>
-            {isOnline
-              ? 'Desliza hacia abajo para sincronizar'
-              : 'Conéctate a internet para descargar el catálogo'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleSync}
-              colors={['#2563eb']}
-            />
-          }
-        />
-      )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate('Cart')}
-      >
-        <Text style={styles.fabText}>🛒</Text>
-      </TouchableOpacity>
+      {/* Product List */}
+      <FlatList
+        data={filteredProducts}
+        renderItem={renderProduct}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.productRow}
+        contentContainerStyle={styles.productList}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>📦</Text>
+            <Text style={styles.emptyTitle}>No se encontraron productos</Text>
+            <Text style={styles.emptySubtitle}>
+              {searchQuery || selectedCategory
+                ? 'Intenta con otros filtros de búsqueda'
+                : 'Desliza hacia abajo para sincronizar'}
+            </Text>
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -169,35 +286,41 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9fafb',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f9fafb',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#64748b',
+    color: '#6b7280',
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 20,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: '#111827',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#6b7280',
     marginTop: 4,
   },
   statusBadge: {
@@ -206,7 +329,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   onlineBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#d1fae5',
   },
   offlineBadge: {
     backgroundColor: '#fee2e2',
@@ -215,108 +338,148 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  listContainer: {
-    padding: 16,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#111827',
+  },
+  clearButton: {
+    fontSize: 18,
+    color: '#9ca3af',
+    paddingHorizontal: 8,
+  },
+  categoryFilterContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryFilterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  categoryFilterButtonActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  categoryFilterText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  categoryFilterTextActive: {
+    color: '#ffffff',
+  },
+  productList: {
+    padding: 8,
+  },
+  productRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
   productCard: {
-    backgroundColor: '#fff',
+    flex: 1,
+    backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    flexDirection: 'row',
+    marginBottom: 16,
+    marginHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
+    overflow: 'hidden',
   },
   productImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 12,
+    width: '100%',
+    height: 150,
   },
   productImagePlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 12,
-    backgroundColor: '#f1f5f9',
+    width: '100%',
+    height: 150,
+    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   productImagePlaceholderText: {
-    fontSize: 32,
+    fontSize: 48,
   },
   productInfo: {
-    flex: 1,
-    justifyContent: 'space-between',
+    padding: 12,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#111827',
     marginBottom: 4,
   },
   productSku: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 2,
+    fontSize: 11,
+    color: '#6b7280',
+    marginBottom: 6,
   },
-  productCategory: {
-    fontSize: 12,
-    color: '#2563eb',
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#1e40af',
   },
   productPricing: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
   },
   productPrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 4,
+    color: '#059669',
   },
   productStock: {
-    fontSize: 12,
-    color: '#64748b',
+    fontSize: 11,
+    color: '#6b7280',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: 64,
   },
   emptyText: {
-    fontSize: 20,
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#111827',
     marginBottom: 8,
   },
-  emptySubtext: {
+  emptySubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#6b7280',
     textAlign: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabText: {
-    fontSize: 28,
   },
 });

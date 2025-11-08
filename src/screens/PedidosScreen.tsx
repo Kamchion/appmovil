@@ -72,24 +72,53 @@ export default function PedidosScreen({ navigation }: any) {
 
   const checkCartAndNavigate = async () => {
     try {
+      console.log('🛒 PedidosScreen: Verificando carrito...');
       const cartData = await AsyncStorage.getItem('cart');
       const cart = cartData ? JSON.parse(cartData) : [];
+      console.log(`📊 Productos en carrito: ${cart.length}`);
       
       if (cart.length > 0) {
         // Hay productos en carrito, mostrar selección de cliente
+        console.log('✅ Mostrando diálogo de selección de cliente');
         setShowClientDialog(true);
       } else {
-        // No hay productos, ir directo al catálogo con delay
-        setTimeout(() => {
-          navigation.navigate('CatalogTabs');
-        }, 100);
+        // No hay productos, verificar que hay productos en BD antes de navegar
+        console.log('⚠️ No hay productos en carrito, verificando catálogo...');
+        const db = getDatabase();
+        const countResult = await db.getAllAsync('SELECT COUNT(*) as count FROM products WHERE isActive = 1');
+        const totalProducts = countResult[0]?.count || 0;
+        
+        if (totalProducts === 0) {
+          console.error('❌ No hay productos en la base de datos');
+          Alert.alert(
+            'Sin catálogo',
+            'No hay productos disponibles. Por favor sincroniza el catálogo desde la pantalla de Inicio.',
+            [
+              {
+                text: 'Ir a Inicio',
+                onPress: () => navigation.navigate('Home')
+              }
+            ]
+          );
+          return;
+        }
+        
+        console.log(`✅ ${totalProducts} productos disponibles, navegando a catálogo...`);
+        // Usar replace para que el botón atrás funcione correctamente
+        navigation.replace('CatalogTabs');
       }
     } catch (error) {
-      console.error('Error al verificar carrito:', error);
-      // En caso de error, ir al catálogo
-      setTimeout(() => {
-        navigation.navigate('CatalogTabs');
-      }, 100);
+      console.error('❌ Error al verificar carrito:', error);
+      Alert.alert(
+        'Error',
+        'Ocurrió un error al verificar el carrito. Por favor intenta nuevamente.',
+        [
+          {
+            text: 'Volver',
+            onPress: () => navigation.navigate('Home')
+          }
+        ]
+      );
     }
   };
 

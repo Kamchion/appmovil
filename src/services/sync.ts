@@ -90,8 +90,12 @@ export async function syncCatalog(
     const db = getDatabase();
     const now = new Date().toISOString();
 
+    console.log(`📦 Guardando ${response.products.length} productos en SQLite...`);
+    
     // Guardar o actualizar productos en la base de datos local
+    let savedCount = 0;
     for (const product of response.products) {
+      try {
       await db.runAsync(
         `INSERT OR REPLACE INTO products 
          (id, sku, name, description, category, subcategory, image, basePrice, stock, isActive,
@@ -126,7 +130,18 @@ export async function syncCatalog(
           now,
         ]
       );
+        savedCount++;
+      } catch (insertError) {
+        console.error(`❌ Error al guardar producto ${product.id}:`, insertError);
+        console.error('Datos del producto:', JSON.stringify(product, null, 2));
+      }
     }
+    
+    console.log(`✅ ${savedCount}/${response.products.length} productos guardados en SQLite`);
+    
+    // Verificar que se guardaron
+    const verifyCount = await db.getAllAsync('SELECT COUNT(*) as count FROM products');
+    console.log(`🔍 Total de productos en BD: ${verifyCount[0]?.count || 0}`);
 
     // Actualizar timestamp de última sincronización
     await setLastSyncTimestamp(response.timestamp);
