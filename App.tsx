@@ -22,7 +22,7 @@ import OrdersScreen from './src/screens/OrdersScreen';
 // Services
 import { setupAutoSync } from './src/services/sync';
 import { initImageCache } from './src/services/imageCache';
-import { resetDatabase } from './src/database/db';
+import { initDatabase, resetDatabase } from './src/database/db';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -81,6 +81,12 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
+      console.log('🚀 Inicializando aplicación...');
+      
+      // Inicializar base de datos SQLite
+      await initDatabase();
+      console.log('✅ Base de datos inicializada');
+      
       // Verificar autenticación
       const token = await AsyncStorage.getItem('vendor_token');
       setIsLoggedIn(!!token);
