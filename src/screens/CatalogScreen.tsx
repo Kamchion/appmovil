@@ -16,14 +16,20 @@ import { Product } from '../types';
 import { syncCatalog, checkConnection } from '../services/sync';
 import { getCachedImagePath } from '../services/imageCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { addToCart } from '../services/cart';
+import { Modal } from 'react-native';
 
 interface CatalogScreenProps {
   navigation: any;
 }
 
 // Componente separado para ProductCard para evitar problemas con hooks
-const ProductCard = React.memo(({ item, navigation, priceType }: { item: Product; navigation: any; priceType?: string }) => {
+const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { item: Product; navigation: any; priceType?: string; onAddToCart?: () => void }) => {
   const [imagePath, setImagePath] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(item.minQuantity || 1);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [adding, setAdding] = useState(false);
   
   // Calcular precio según tipo de cliente
   const getPrice = () => {
@@ -51,22 +57,93 @@ const ProductCard = React.memo(({ item, navigation, priceType }: { item: Product
     return null;
   }
 
+  const handleAddToCart = async () => {
+    if (adding) return;
+    
+    setAdding(true);
+    try {
+      const productWithPrice = {
+        ...item,
+        price: displayPrice.toString(),
+      };
+      
+      await addToCart(productWithPrice, quantity);
+      Alert.alert('✅ Agregado', `${quantity} × ${item.name} agregado al carrito`);
+      
+      // Resetear cantidad
+      setQuantity(item.minQuantity || 1);
+      
+      // Notificar al padre para actualizar contador
+      if (onAddToCart) onAddToCart();
+    } catch (error) {
+      console.error('Error al agregar al carrito:', error);
+      Alert.alert('Error', 'No se pudo agregar al carrito');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const incrementQuantity = () => {
+    setQuantity(prev => prev + 1);
+  };
+
+  const decrementQuantity = () => {
+    const minQty = item.minQuantity || 1;
+    if (quantity > minQty) {
+      setQuantity(prev => prev - 1);
+    }
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => navigation.navigate('ProductDetail', { product: item })}
-    >
-      {imagePath ? (
-        <Image
-          source={{ uri: imagePath }}
-          style={styles.productImage}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.productImagePlaceholder}>
-          <Text style={styles.productImagePlaceholderText}>📦</Text>
-        </View>
-      )}
+    <View style={styles.productCard}>
+      {/* Modal de imagen grande */}
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.imageModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageModal(false)}
+        >
+          <View style={styles.imageModalContent}>
+            {imagePath ? (
+              <Image
+                source={{ uri: imagePath }}
+                style={styles.imageModalImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.imageModalPlaceholder}>📦</Text>
+            )}
+            <TouchableOpacity
+              style={styles.imageModalClose}
+              onPress={() => setShowImageModal(false)}
+            >
+              <Ionicons name="close-circle" size={40} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Imagen del producto */}
+      <TouchableOpacity onPress={() => setShowImageModal(true)}>
+        {imagePath ? (
+          <Image
+            source={{ uri: imagePath }}
+            style={styles.productImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.productImagePlaceholder}>
+            <Text style={styles.productImagePlaceholderText}>📦</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Info del producto */}
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={2}>
           {item.name || 'Sin nombre'}
@@ -81,13 +158,45 @@ const ProductCard = React.memo(({ item, navigation, priceType }: { item: Product
           <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
           <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
+
+        {/* Controles de cantidad */}
+        <View style={styles.quantityContainer}>
+          <TouchableOpacity
+            style={styles.quantityButton}
+            onPress={decrementQuantity}
+          >
+            <Ionicons name="remove" size={16} color="#64748b" />
+          </TouchableOpacity>
+          
+          <Text style={styles.quantityText}>{quantity}</Text>
+          
+          <TouchableOpacity
+            style={styles.quantityButton}
+            onPress={incrementQuantity}
+          >
+            <Ionicons name="add" size={16} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Botón agregar al carrito */}
+        <TouchableOpacity
+          style={[styles.addToCartButton, adding && styles.addToCartButtonDisabled]}
+          onPress={handleAddToCart}
+          disabled={adding}
+        >
+          <Ionicons name="cart" size={16} color="#ffffff" />
+          <Text style={styles.addToCartButtonText}>
+            {adding ? 'Agregando...' : 'Agregar'}
+          </Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 });
 
 export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [cartCount, setCartCount] = useState({ lines: 0, items: 0 });
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,10 +207,19 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
   useEffect(() => {
-    loadSelectedClient();
     loadProducts();
+    loadSelectedClient();
+    loadCartCount();
     checkConnectionStatus();
   }, []);
+
+  useEffect(() => {
+    // Actualizar contador cuando cambia la navegación (vuelve de carrito)
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadCartCount();
+    });
+    return unsubscribe;
+  }, [navigation]);
   
   const loadSelectedClient = async () => {
     try {
@@ -123,6 +241,23 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const checkConnectionStatus = async () => {
     const online = await checkConnection();
     setIsOnline(online);
+  };
+
+  const loadCartCount = async () => {
+    try {
+      const db = getDatabase();
+      const result = await db.getAllAsync<{ lines: number; items: number }>(
+        'SELECT COUNT(DISTINCT productId) as lines, SUM(quantity) as items FROM cart'
+      );
+      if (result && result.length > 0) {
+        setCartCount({
+          lines: result[0].lines || 0,
+          items: result[0].items || 0,
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar contador de carrito:', error);
+    }
   };
 
   const loadProducts = async () => {
@@ -218,7 +353,12 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   };
 
   const renderProduct = ({ item }: { item: Product }) => (
-    <ProductCard item={item} navigation={navigation} priceType={selectedClient?.priceType} />
+    <ProductCard 
+      item={item} 
+      navigation={navigation} 
+      priceType={selectedClient?.priceType}
+      onAddToCart={loadCartCount} 
+    />
   );
 
   const renderCategoryFilter = () => (
@@ -281,10 +421,22 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
               {filteredProducts.length} de {products.length} productos
             </Text>
           </View>
-          <View style={[styles.statusBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
-            <Text style={styles.statusText}>
-              {isOnline ? '🌐 Online' : '📱 Offline'}
-            </Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.cartButton}
+              onPress={() => navigation.navigate('Cart')}
+            >
+              <Ionicons name="cart" size={24} color="#2563eb" />
+              {cartCount.lines > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartCount.lines}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <View style={styles.cartInfo}>
+              <Text style={styles.cartInfoText}>{cartCount.lines} líneas</Text>
+              <Text style={styles.cartInfoText}>{cartCount.items} items</Text>
+            </View>
           </View>
         </View>
 
@@ -365,6 +517,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cartButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cartBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  cartInfo: {
+    alignItems: 'flex-end',
+  },
+  cartInfoText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '500',
   },
   headerTitle: {
     fontSize: 24,
@@ -513,6 +699,73 @@ const styles = StyleSheet.create({
   productStock: {
     fontSize: 11,
     color: '#6b7280',
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginHorizontal: 16,
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  addToCartButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  addToCartButtonDisabled: {
+    opacity: 0.6,
+  },
+  addToCartButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  imageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalContent: {
+    width: '90%',
+    height: '80%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageModalPlaceholder: {
+    fontSize: 100,
+  },
+  imageModalClose: {
+    position: 'absolute',
+    top: -50,
+    right: 10,
   },
   emptyContainer: {
     flex: 1,

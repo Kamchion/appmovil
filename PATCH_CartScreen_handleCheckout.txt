@@ -1,0 +1,140 @@
+// Reemplazar handleCheckout (líneas 198-229) con esta versión:
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      Alert.alert('Carrito vacío', 'Agrega productos antes de realizar el pedido');
+      return;
+    }
+
+    // Validar que haya un cliente asignado
+    if (!selectedClient) {
+      Alert.alert(
+        'Cliente no asignado',
+        '¿Deseas asignar un cliente a este pedido?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          },
+          {
+            text: 'Asignar Cliente',
+            onPress: () => navigation.navigate('Pedidos')
+          }
+        ]
+      );
+      return;
+    }
+
+    // Confirmar antes de crear el pedido
+    Alert.alert(
+      '¿Confirmar Pedido?',
+      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas crear este pedido?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { getDatabase } = require('../database/db');
+              const db = getDatabase();
+              const agentNumber = await AsyncStorage.getItem('agentNumber');
+              const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+              const now = new Date().toISOString();
+
+              console.log('📋 Creando pedido:', {
+                orderId,
+                clientId: selectedClient.id,
+                clientName: selectedClient.companyName,
+                total: total.toFixed(2),
+                items: cart.length
+              });
+
+              // Crear pedido en la tabla orders
+              await db.runAsync(
+                `INSERT INTO orders 
+                 (orderId, clientId, clientName, agentNumber, customerNote, subtotal, tax, total, status, createdAt, synced)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                [
+                  orderId,
+                  selectedClient.id.toString(),
+                  selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
+                  agentNumber || '',
+                  customerNote || '',
+                  subtotal.toString(),
+                  tax.toString(),
+                  total.toString(),
+                  'pending',
+                  now,
+                ]
+              );
+
+              // Crear items del pedido
+              for (const item of cart) {
+                await db.runAsync(
+                  `INSERT INTO orderItems 
+                   (orderId, productId, productName, productSku, quantity, pricePerUnit, subtotal)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    orderId,
+                    item.product.id,
+                    item.product.name,
+                    item.product.sku,
+                    item.quantity,
+                    item.product.price,
+                    (parseFloat(item.product.price) * item.quantity).toString(),
+                  ]
+                );
+              }
+
+              console.log('✅ Pedido creado exitosamente:', orderId);
+
+              // Limpiar carrito
+              await clearCart();
+
+              // Limpiar cliente seleccionado
+              await AsyncStorage.removeItem('selectedClientId');
+              await AsyncStorage.removeItem('selectedClientData');
+
+              console.log('🧹 Carrito y cliente seleccionado limpiados');
+
+              Alert.alert(
+                '✅ Pedido Creado',
+                `Pedido ${orderId} creado exitosamente para ${selectedClient.companyName || selectedClient.contactPerson}`,
+                [
+                  {
+                    text: 'Ver Pedidos',
+                    onPress: () => {
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Main' }],
+                      });
+                      navigation.navigate('Orders');
+                    },
+                  },
+                  {
+                    text: 'Crear Otro Pedido',
+                    onPress: () => {
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Main' }],
+                      });
+                      navigation.navigate('Pedidos');
+                    },
+                  },
+                ]
+              );
+            } catch (error: any) {
+              console.error('❌ Error al crear pedido:', error);
+              Alert.alert('Error', 'No se pudo crear el pedido: ' + error.message);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
