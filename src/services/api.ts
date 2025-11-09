@@ -365,3 +365,46 @@ export async function getAssignedClients(): Promise<{
   console.error('❌ Formato de respuesta inesperado:', data);
   throw new Error('Formato de respuesta inesperado');
 }
+
+/**
+ * Crea un pedido directamente en el backend (online)
+ * Sincroniza con el backend y envía correo automáticamente
+ */
+export async function createOrderOnline(params: {
+  cart: Array<{
+    product: {
+      id: string;
+      name: string;
+      sku: string;
+      price: string;
+    };
+    quantity: number;
+  }>;
+  customerNote?: string;
+  selectedClientId?: string;
+}): Promise<{
+  success: boolean;
+  orderId: string;
+  orderNumber: string;
+  total: string;
+}> {
+  // Primero limpiar el carrito del backend
+  await trpcMutation('cart.clear');
+  
+  // Agregar cada item al carrito del backend
+  for (const item of params.cart) {
+    await trpcMutation('cart.addItem', {
+      productId: item.product.id,
+      quantity: item.quantity,
+    });
+  }
+  
+  // Ahora hacer checkout
+  return await trpcMutation(
+    'orders.checkout',
+    {
+      customerNote: params.customerNote,
+      selectedClientId: params.selectedClientId,
+    }
+  );
+}

@@ -201,129 +201,77 @@ export default function CartScreen({ navigation }: CartScreenProps) {
       return;
     }
 
-    // Validar que haya un cliente asignado
     if (!selectedClient) {
-      Alert.alert(
-        'Cliente no asignado',
-        '¿Deseas asignar un cliente a este pedido?',
-        [
-          {
-            text: 'Cancelar',
-            style: 'cancel'
-          },
-          {
-            text: 'Asignar Cliente',
-            onPress: () => navigation.navigate('Pedidos')
-          }
-        ]
-      );
+      Alert.alert('Cliente no asignado', '¿Deseas asignar un cliente a este pedido?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Asignar Cliente', onPress: () => navigation.navigate('Pedidos') }
+      ]);
       return;
     }
 
-    // Confirmar antes de crear el pedido
     Alert.alert(
       '¿Confirmar Pedido?',
       `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas crear este pedido?`,
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel'
-        },
+        { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Confirmar',
           onPress: async () => {
             setLoading(true);
             try {
+              const { createOrderOnline } = require('../services/api');
               const { getDatabase } = require('../database/db');
               const db = getDatabase();
               const agentNumber = await AsyncStorage.getItem('agentNumber');
-              const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-              const now = new Date().toISOString();
+              
+              try {
+                console.log('🌐 Intentando crear pedido en el backend...');
+                const result = await createOrderOnline({
+                  cart: cart.map(item => ({
+                    product: { id: item.product.id, name: item.product.name, sku: item.product.sku, price: item.product.price },
+                    quantity: item.quantity,
+                  })),
+                  customerNote,
+                  selectedClientId: selectedClient.id.toString(),
+                });
 
-              console.log('📋 Creando pedido:', {
-                orderId,
-                clientId: selectedClient.id,
-                clientName: selectedClient.companyName,
-                total: total.toFixed(2),
-                items: cart.length
-              });
+                await clearCart();
+                await AsyncStorage.removeItem('selectedClientId');
+                await AsyncStorage.removeItem('selectedClientData');
 
-              // Crear pedido en la tabla orders
-              await db.runAsync(
-                `INSERT INTO orders 
-                 (orderId, clientId, clientName, agentNumber, customerNote, subtotal, tax, total, status, createdAt, synced)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-                [
-                  orderId,
-                  selectedClient.id.toString(),
-                  selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
-                  agentNumber || '',
-                  customerNote || '',
-                  subtotal.toString(),
-                  tax.toString(),
-                  total.toString(),
-                  'pending',
-                  now,
-                ]
-              );
+                Alert.alert('✅ Pedido Enviado', `Pedido ${result.orderNumber} creado y enviado.\n\nSe ha enviado un correo de confirmación.`, [
+                  { text: 'Ver Pedidos', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Orders'); } },
+                  { text: 'Crear Otro Pedido', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Pedidos'); } },
+                ]);
 
-              // Crear items del pedido
-              for (const item of cart) {
+              } catch (apiError: any) {
+                console.log('⚠️ Guardando localmente...');
+                const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+                const now = new Date().toISOString();
+
                 await db.runAsync(
-                  `INSERT INTO orderItems 
-                   (orderId, productId, productName, productSku, quantity, pricePerUnit, subtotal)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    orderId,
-                    item.product.id,
-                    item.product.name,
-                    item.product.sku,
-                    item.quantity,
-                    item.product.price,
-                    (parseFloat(item.product.price) * item.quantity).toString(),
-                  ]
+                  `INSERT INTO orders (orderId, clientId, clientName, agentNumber, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                  [orderId, selectedClient.id.toString(), selectedClient.companyName || selectedClient.contactPerson || 'Cliente', agentNumber || '', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'pending', now]
                 );
+
+                for (const item of cart) {
+                  await db.runAsync(
+                    `INSERT INTO orderItems (orderId, productId, productName, productSku, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [orderId, item.product.id, item.product.name, item.product.sku, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                  );
+                }
+
+                await clearCart();
+                await AsyncStorage.removeItem('selectedClientId');
+                await AsyncStorage.removeItem('selectedClientData');
+
+                Alert.alert('✅ Pedido Guardado', `Pedido ${orderId} guardado localmente.\n\nSe sincronizará cuando haya conexión.`, [
+                  { text: 'Ver Pedidos', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Orders'); } },
+                  { text: 'Crear Otro Pedido', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Pedidos'); } },
+                ]);
               }
-
-              console.log('✅ Pedido creado exitosamente:', orderId);
-
-              // Limpiar carrito
-              await clearCart();
-
-              // Limpiar cliente seleccionado
-              await AsyncStorage.removeItem('selectedClientId');
-              await AsyncStorage.removeItem('selectedClientData');
-
-              console.log('🧹 Carrito y cliente seleccionado limpiados');
-
-              Alert.alert(
-                '✅ Pedido Creado',
-                `Pedido ${orderId} creado exitosamente para ${selectedClient.companyName || selectedClient.contactPerson}`,
-                [
-                  {
-                    text: 'Ver Pedidos',
-                    onPress: () => {
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'Main' }],
-                      });
-                      navigation.navigate('Orders');
-                    },
-                  },
-                  {
-                    text: 'Crear Otro Pedido',
-                    onPress: () => {
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'Main' }],
-                      });
-                      navigation.navigate('Pedidos');
-                    },
-                  },
-                ]
-              );
             } catch (error: any) {
-              console.error('❌ Error al crear pedido:', error);
+              console.error('❌ Error:', error);
               Alert.alert('Error', 'No se pudo crear el pedido: ' + error.message);
             } finally {
               setLoading(false);
@@ -448,13 +396,27 @@ export default function CartScreen({ navigation }: CartScreenProps) {
             />
           </View>
 
-          {/* Botón Realizar Pedido */}
-          <TouchableOpacity
-            style={styles.checkoutButton}
-            onPress={handleCheckout}
-          >
-            <Text style={styles.checkoutButtonText}>Realizar Pedido</Text>
-          </TouchableOpacity>
+          {/* Botones de acción */}
+          <View style={styles.actionButtons}>
+            {/* Enviar Pedido */}
+            <TouchableOpacity
+              style={styles.checkoutButton}
+              onPress={handleCheckout}
+              disabled={loading}
+            >
+              <Text style={styles.checkoutButtonText}>
+                {loading ? 'ENVIANDO...' : 'ENVIAR PEDIDO'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Seguir Comprando */}
+            <TouchableOpacity
+              style={styles.continueShoppingButton}
+              onPress={() => navigation.navigate('CatalogTabs')}
+            >
+              <Text style={styles.continueShoppingButtonText}>SEGUIR COMPRANDO</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Espacio al final para scroll */}
@@ -532,6 +494,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 6,
     marginRight: 12,
+    resizeMode: 'cover',
   },
   itemImagePlaceholder: {
     width: 48,
@@ -670,17 +633,33 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     minHeight: 80,
   },
+  actionButtons: {
+    gap: 12,
+    marginTop: 16,
+  },
   checkoutButton: {
     backgroundColor: '#2563eb',
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 16,
   },
   checkoutButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  continueShoppingButton: {
+    backgroundColor: '#059669',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  continueShoppingButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 0.5,
   },
   emptyContainer: {
     flex: 1,

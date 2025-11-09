@@ -1,0 +1,201 @@
+// Nuevo handleCheckout con sincronización con backend
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      Alert.alert('Carrito vacío', 'Agrega productos antes de realizar el pedido');
+      return;
+    }
+
+    // Validar que haya un cliente asignado
+    if (!selectedClient) {
+      Alert.alert(
+        'Cliente no asignado',
+        '¿Deseas asignar un cliente a este pedido?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          },
+          {
+            text: 'Asignar Cliente',
+            onPress: () => navigation.navigate('Pedidos')
+          }
+        ]
+      );
+      return;
+    }
+
+    // Confirmar antes de crear el pedido
+    Alert.alert(
+      '¿Confirmar Pedido?',
+      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas crear este pedido?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { createOrderOnline } = require('../services/api');
+              const { getDatabase } = require('../database/db');
+              const db = getDatabase();
+              const agentNumber = await AsyncStorage.getItem('agentNumber');
+              
+              // Intentar crear pedido en el backend primero
+              try {
+                console.log('🌐 Intentando crear pedido en el backend...');
+                
+                const result = await createOrderOnline({
+                  cart: cart.map(item => ({
+                    product: {
+                      id: item.product.id,
+                      name: item.product.name,
+                      sku: item.product.sku,
+                      price: item.product.price,
+                    },
+                    quantity: item.quantity,
+                  })),
+                  customerNote,
+                  selectedClientId: selectedClient.id.toString(),
+                });
+
+                console.log('✅ Pedido creado en el backend:', result);
+
+                // Limpiar carrito
+                await clearCart();
+
+                // Limpiar cliente seleccionado
+                await AsyncStorage.removeItem('selectedClientId');
+                await AsyncStorage.removeItem('selectedClientData');
+
+                Alert.alert(
+                  '✅ Pedido Enviado',
+                  `Pedido ${result.orderNumber} creado y enviado exitosamente.\n\nSe ha enviado un correo de confirmación al cliente.`,
+                  [
+                    {
+                      text: 'Ver Pedidos',
+                      onPress: () => {
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'Main' }],
+                        });
+                        navigation.navigate('Orders');
+                      },
+                    },
+                    {
+                      text: 'Crear Otro Pedido',
+                      onPress: () => {
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'Main' }],
+                        });
+                        navigation.navigate('Pedidos');
+                      },
+                    },
+                  ]
+                );
+
+              } catch (apiError: any) {
+                console.log('⚠️ No se pudo conectar al backend, guardando localmente...');
+                console.error('Error API:', apiError);
+
+                // Si falla el backend, guardar localmente
+                const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+                const now = new Date().toISOString();
+
+                console.log('📋 Creando pedido localmente:', {
+                  orderId,
+                  clientId: selectedClient.id,
+                  clientName: selectedClient.companyName,
+                  total: total.toFixed(2),
+                  items: cart.length
+                });
+
+                // Crear pedido en la tabla orders (local)
+                await db.runAsync(
+                  `INSERT INTO orders 
+                   (orderId, clientId, clientName, agentNumber, customerNote, subtotal, tax, total, status, createdAt, synced)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                  [
+                    orderId,
+                    selectedClient.id.toString(),
+                    selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
+                    agentNumber || '',
+                    customerNote || '',
+                    subtotal.toString(),
+                    tax.toString(),
+                    total.toString(),
+                    'pending',
+                    now,
+                  ]
+                );
+
+                // Crear items del pedido
+                for (const item of cart) {
+                  await db.runAsync(
+                    `INSERT INTO orderItems 
+                     (orderId, productId, productName, productSku, quantity, pricePerUnit, subtotal)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                      orderId,
+                      item.product.id,
+                      item.product.name,
+                      item.product.sku,
+                      item.quantity,
+                      item.product.price,
+                      (parseFloat(item.product.price) * item.quantity).toString(),
+                    ]
+                  );
+                }
+
+                console.log('✅ Pedido guardado localmente:', orderId);
+
+                // Limpiar carrito
+                await clearCart();
+
+                // Limpiar cliente seleccionado
+                await AsyncStorage.removeItem('selectedClientId');
+                await AsyncStorage.removeItem('selectedClientData');
+
+                Alert.alert(
+                  '✅ Pedido Guardado',
+                  `Pedido ${orderId} guardado localmente.\n\nSe sincronizará automáticamente cuando haya conexión.`,
+                  [
+                    {
+                      text: 'Ver Pedidos',
+                      onPress: () => {
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'Main' }],
+                        });
+                        navigation.navigate('Orders');
+                      },
+                    },
+                    {
+                      text: 'Crear Otro Pedido',
+                      onPress: () => {
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'Main' }],
+                        });
+                        navigation.navigate('Pedidos');
+                      },
+                    },
+                  ]
+                );
+              }
+
+            } catch (error: any) {
+              console.error('❌ Error al crear pedido:', error);
+              Alert.alert('Error', 'No se pudo crear el pedido: ' + error.message);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };

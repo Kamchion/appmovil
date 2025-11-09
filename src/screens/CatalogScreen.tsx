@@ -648,6 +648,7 @@ const styles = StyleSheet.create({
   productImage: {
     width: '100%',
     height: 150,
+    resizeMode: 'cover',
   },
   productImagePlaceholder: {
     width: '100%',
