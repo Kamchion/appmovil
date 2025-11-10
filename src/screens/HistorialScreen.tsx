@@ -50,10 +50,17 @@ export default function HistorialScreen({ navigation }: any) {
     try {
       const db = getDatabase();
 
-      // Get all orders from pending_orders table
-      const allOrders = await db.getAllAsync<any>(
-        'SELECT * FROM pending_orders ORDER BY createdAt DESC'
+      // Get orders from both pending_orders and order_history
+      const pendingOrders = await db.getAllAsync<any>(
+        'SELECT id, customerName, customerContact, total, createdAt, synced, "pending" as source FROM pending_orders'
       );
+      
+      const historyOrders = await db.getAllAsync<any>(
+        'SELECT id, customerName, customerContact, total, createdAt, "history" as source FROM order_history'
+      );
+
+      // Combine both arrays
+      const allOrders = [...pendingOrders, ...historyOrders];
 
       // Filter orders from current month
       const now = new Date();
@@ -71,13 +78,16 @@ export default function HistorialScreen({ navigation }: any) {
       // Map to Order interface
       const mappedOrders: Order[] = currentMonthOrders.map((order: any) => ({
         id: order.id,
-        orderNumber: `ORD-${order.id}`,
+        orderNumber: order.source === 'history' ? (order.id || `ORD-${order.id}`) : `PENDING-${order.id}`,
         customerName: order.customerName || 'Cliente',
         customerContact: order.customerContact || '',
         total: order.total || '0',
-        status: order.synced ? 'completed' : 'pending',
+        status: order.source === 'history' ? 'completed' : (order.synced ? 'completed' : 'pending'),
         createdAt: order.createdAt,
       }));
+      
+      // Sort by date (most recent first)
+      mappedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Calculate stats
       const totalOrders = mappedOrders.length;
