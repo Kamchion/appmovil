@@ -231,6 +231,11 @@ export default function ClientesScreen() {
         
         if (!token) {
           console.warn('⚠️ No hay token de vendedor, se sincronizará después');
+          Alert.alert(
+            '⚠️ Sin Conexión',
+            'Cliente guardado localmente. Los cambios se sincronizarán cuando inicies sesión.',
+            [{ text: 'OK' }]
+          );
         } else {
           console.log('🔄 Sincronizando cliente con servidor...');
           console.log('Token:', token.substring(0, 20) + '...');
@@ -268,8 +273,13 @@ export default function ClientesScreen() {
         console.error('❌ Error al sincronizar con servidor:', syncError);
         console.error('Error message:', syncError.message);
         console.error('Error stack:', syncError.stack);
-        // No mostrar error al usuario, se sincronizará después
-        // needsSync ya está en 1, se reintentará en próxima sincronización
+        
+        // Mostrar advertencia al usuario sobre el error de sincronización
+        Alert.alert(
+          '⚠️ Advertencia',
+          `Cliente guardado localmente, pero no se pudo sincronizar con el servidor.\n\nError: ${syncError.message}\n\nLos cambios se sincronizarán automáticamente en la próxima sincronización.`,
+          [{ text: 'Entendido' }]
+        );
       }
 
       Alert.alert('Éxito', 'Cliente actualizado exitosamente');
