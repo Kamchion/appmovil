@@ -474,31 +474,27 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
   const loadCartCount = async () => {
     try {
-      const db = getDatabase();
-      const result = await db.getAllAsync<{ lines: number; items: number }>(
-        'SELECT COUNT(DISTINCT productId) as lines, SUM(quantity) as items FROM cart'
-      );
-      if (result && result.length > 0) {
-        setCartCount({
-          lines: result[0].lines || 0,
-          items: result[0].items || 0,
-        });
-      }
+      // Usar getCart de AsyncStorage para consistencia con CartScreen
+      const { getCart } = require('../services/cart');
+      const cart = await getCart();
+      
+      // Contar líneas (productos únicos)
+      const lines = cart.length;
+      
+      // Contar items totales
+      const items = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      
+      setCartCount({ lines, items });
       
       // Calcular total del carrito
-      const cartItems = await db.getAllAsync<any>(
-        'SELECT c.quantity, p.basePrice, p.priceCity, p.priceInterior, p.priceSpecial FROM cart c JOIN products p ON c.productId = p.id'
-      );
       let total = 0;
-      cartItems.forEach(item => {
-        const price = selectedClient?.priceType === 'interior' ? (item.priceInterior || item.basePrice) :
-                      selectedClient?.priceType === 'especial' ? (item.priceSpecial || item.basePrice) :
-                      (item.priceCity || item.basePrice);
-        total += parseFloat(price) * item.quantity;
+      cart.forEach((item: any) => {
+        const price = parseFloat(item.product.price || '0');
+        total += price * item.quantity;
       });
       setCartTotal(total.toFixed(2));
     } catch (error) {
-      console.error('Error al cargar contador de carrito:', error);
+      console.error('❌ Error al cargar contador del carrito:', error);
     }
   };
 
