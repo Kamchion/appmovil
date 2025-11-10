@@ -248,14 +248,15 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 const now = new Date().toISOString();
 
                 await db.runAsync(
-                  `INSERT INTO orders (orderId, clientId, clientName, agentNumber, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-                  [orderId, selectedClient.id.toString(), selectedClient.companyName || selectedClient.contactPerson || 'Cliente', agentNumber || '', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'pending', now]
+                  `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                  [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'pending', now]
                 );
 
                 for (const item of cart) {
+                  const itemId = `${orderId}-${item.product.id}`;
                   await db.runAsync(
-                    `INSERT INTO orderItems (orderId, productId, productName, productSku, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [orderId, item.product.id, item.product.name, item.product.sku, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
                   );
                 }
 

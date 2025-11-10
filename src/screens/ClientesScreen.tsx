@@ -139,25 +139,26 @@ export default function ClientesScreen() {
 
     try {
       const db = getDatabase();
-      const newId = Date.now();
+      const newId = Date.now().toString();
       
       await db.runAsync(
         `INSERT INTO clients 
-         (id, name, companyName, email, phone, address, city, state, clientNumber, priceType, isActive, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, name, companyName, email, phone, address, city, state, clientNumber, priceType, isActive, syncedAt, needsSync)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newId,
           formData.contactPerson,
           formData.companyName,
-          formData.email || null,
+          formData.email || '',
           formData.phone,
-          formData.address || null,
-          null,
-          null,
+          formData.address || '',
+          '',
+          '',
           formData.clientNumber,
           formData.priceType,
           1,
           new Date().toISOString(),
+          1,
         ]
       );
 
@@ -206,9 +207,9 @@ export default function ClientesScreen() {
         [
           formData.contactPerson,
           formData.companyName,
-          formData.email || null,
+          formData.email || '',
           formData.phone,
-          formData.address || null,
+          formData.address || '',
           formData.clientNumber,
           formData.priceType,
           new Date().toISOString(),

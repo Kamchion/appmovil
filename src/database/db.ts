@@ -563,6 +563,11 @@ export async function resetDatabase(): Promise<void> {
     await SQLite.deleteDatabaseAsync(DB_NAME);
     console.log('✅ Base de datos eliminada');
 
+    // Limpiar timestamp de última sincronización para forzar sincronización completa
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.removeItem('last_sync_timestamp');
+    console.log('✅ Timestamp de sincronización limpiado');
+
     // Reinicializar
     await initDatabase();
     console.log('✅ Base de datos recreada');
