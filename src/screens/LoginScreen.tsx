@@ -6,9 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../services/api';
@@ -149,10 +150,17 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>IMPORKAM</Text>
-        <Text style={styles.subtitle}>App de Vendedores</Text>
+      {/* Logo en la parte superior */}
+      <View style={styles.logoContainer}>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
 
+      {/* Campos de login en la parte inferior */}
+      <View style={styles.card}>
         <TextInput
           style={styles.input}
           placeholder="Usuario o Email"
@@ -195,33 +203,30 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2563eb', // Fondo azul IMPORKAM
+    justifyContent: 'space-between',
+  },
+  logoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  logo: {
+    width: 200,
+    height: 200,
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    margin: 20,
-    marginTop: 'auto',
-    marginBottom: 'auto',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 32,
+    paddingBottom: 40,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 4,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 32,
+    elevation: 8,
   },
   input: {
     backgroundColor: '#f8fafc',
