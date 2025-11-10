@@ -45,8 +45,8 @@ export async function addToCart(
   const existingIndex = cart.findIndex((item) => item.product.id === product.id);
 
   if (existingIndex >= 0) {
-    // Actualizar cantidad
-    cart[existingIndex].quantity += quantity;
+    // Reemplazar cantidad (no sumar)
+    cart[existingIndex].quantity = quantity;
   } else {
     // Agregar nuevo item
     cart.push({ product, quantity });

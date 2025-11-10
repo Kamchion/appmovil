@@ -254,7 +254,8 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
       };
       
       await addToCart(productWithPrice, quantity);
-      setQuantity(0);
+      // NO resetear cantidad - mantener el valor para que el usuario vea cuánto agregó
+      // setQuantity(0); // Comentado: ahora la cantidad persiste
       if (onAddToCart) onAddToCart();
     } catch (error) {
       console.error('Error al agregar al carrito:', error);
