@@ -127,7 +127,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
               },
             },
             {
-              text: 'Enviar sin Seguir Comprando',
+              text: 'Enviar Pedido',
               onPress: async () => {
                 // Enviar pedido directamente
                 try {
