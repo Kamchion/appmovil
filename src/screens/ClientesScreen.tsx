@@ -228,9 +228,22 @@ export default function ClientesScreen() {
         const { updateClientOnServer } = require('../services/api-client-update');
         
         const token = await AsyncStorage.getItem('vendor_token');
-        if (token) {
+        
+        if (!token) {
+          console.warn('⚠️ No hay token de vendedor, se sincronizará después');
+        } else {
           console.log('🔄 Sincronizando cliente con servidor...');
-          await updateClientOnServer(token, editingClient!.id, {
+          console.log('Token:', token.substring(0, 20) + '...');
+          console.log('Client ID:', editingClient!.id);
+          console.log('Updates:', {
+            name: formData.contactPerson,
+            companyName: formData.companyName,
+            email: formData.email || '',
+            phone: formData.phone,
+            priceType: formData.priceType,
+          });
+          
+          const result = await updateClientOnServer(token, editingClient!.id, {
             name: formData.contactPerson,
             companyName: formData.companyName,
             email: formData.email || '',
@@ -241,6 +254,8 @@ export default function ClientesScreen() {
             priceType: formData.priceType,
           });
           
+          console.log('📡 Respuesta del servidor:', result);
+          
           // Marcar como sincronizado
           await db.runAsync(
             `UPDATE clients SET needsSync = 0, syncedAt = ? WHERE id = ?`,
@@ -249,9 +264,12 @@ export default function ClientesScreen() {
           
           console.log('✅ Cliente sincronizado con servidor exitosamente');
         }
-      } catch (syncError) {
-        console.warn('⚠️ Error al sincronizar con servidor (se intentará en próxima sincronización):', syncError);
+      } catch (syncError: any) {
+        console.error('❌ Error al sincronizar con servidor:', syncError);
+        console.error('Error message:', syncError.message);
+        console.error('Error stack:', syncError.stack);
         // No mostrar error al usuario, se sincronizará después
+        // needsSync ya está en 1, se reintentará en próxima sincronización
       }
 
       Alert.alert('Éxito', 'Cliente actualizado exitosamente');

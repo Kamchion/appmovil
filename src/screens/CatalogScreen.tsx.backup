@@ -10,7 +10,6 @@ import {
   Alert,
   TextInput,
   Image,
-  ScrollView,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { Product } from '../types';
@@ -114,14 +113,13 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
 };
 
 // Componente separado para ProductCard para evitar problemas con hooks
-// Componente separado para ProductCard para evitar problemas con hooks
 const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { item: Product; navigation: any; priceType?: string; onAddToCart?: () => void }) => {
   const [imagePath, setImagePath] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(0);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   const [variants, setVariants] = useState<Product[]>([]);
   const [hasVariants, setHasVariants] = useState(false);
-  const [quantity, setQuantity] = useState(0);
   const [adding, setAdding] = useState(false);
   
   // Calcular precio según tipo de cliente usando la utilidad
@@ -174,6 +172,32 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     return null;
   }
 
+  const handleAddToCart = async () => {
+    if (adding) return;
+    
+    setAdding(true);
+    try {
+      const productWithPrice = {
+        ...item,
+        price: displayPrice.toString(),
+      };
+      
+      await addToCart(productWithPrice, quantity);
+      // Eliminado pop-up innecesario
+      
+      // Resetear cantidad
+      setQuantity(item.minQuantity || 1);
+      
+      // Notificar al padre para actualizar contador
+      if (onAddToCart) onAddToCart();
+    } catch (error) {
+      console.error('Error al agregar al carrito:', error);
+      Alert.alert('Error', 'No se pudo agregar al carrito');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const incrementQuantity = () => {
     const minQty = item.minQuantity || 1;
     if (quantity === 0) {
@@ -192,123 +216,100 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     }
   };
 
-  const handleAddToCart = async () => {
-    if (adding || quantity === 0) return;
-    
-    setAdding(true);
-    try {
-      const productWithPrice = {
-        ...item,
-        price: displayPrice.toString(),
-      };
-      
-      await addToCart(productWithPrice, quantity);
-      setQuantity(0);
-      if (onAddToCart) onAddToCart();
-    } catch (error) {
-      console.error('Error al agregar al carrito:', error);
-      Alert.alert('Error', 'No se pudo agregar al carrito');
-    } finally {
-      setAdding(false);
-    }
-  };
-
   try {
     return (
       <View style={styles.productCard}>
-        {/* Modal de imagen grande */}
-        <Modal
-          visible={showImageModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowImageModal(false)}
+      {/* Modal de imagen grande */}
+      <Modal
+        visible={showImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.imageModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageModal(false)}
         >
-          <TouchableOpacity
-            style={styles.imageModalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowImageModal(false)}
-          >
-            <View style={styles.imageModalContent}>
-              {imagePath ? (
-                <Image
-                  source={{ uri: imagePath }}
-                  style={styles.imageModalImage}
-                  resizeMode="contain"
-                />
-              ) : (
-                <View style={styles.imageModalPlaceholder}>
-                  <Ionicons name="image-outline" size={80} color="#cbd5e1" />
-                </View>
-              )}
-              <TouchableOpacity
-                style={styles.imageModalClose}
-                onPress={() => setShowImageModal(false)}
-              >
-                <Ionicons name="close-circle" size={40} color="#ffffff" />
+          <View style={styles.imageModalContent}>
+            {imagePath ? (
+              <Image
+                source={{ uri: imagePath }}
+                style={styles.imageModalImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.imageModalPlaceholder}>📦</Text>
+            )}
+            <TouchableOpacity
+              style={styles.imageModalClose}
+              onPress={() => setShowImageModal(false)}
+            >
+              <Ionicons name="close-circle" size={40} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal de variantes */}
+      <Modal
+        visible={showVariantsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowVariantsModal(false)}
+      >
+        <View style={styles.variantsModalOverlay}>
+          <View style={styles.variantsModalContent}>
+            <View style={styles.variantsModalHeader}>
+              <Text style={styles.variantsModalTitle}>{item.name}</Text>
+              <TouchableOpacity onPress={() => setShowVariantsModal(false)}>
+                <Ionicons name="close" size={28} color="#64748b" />
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Modal de variantes */}
-        <Modal
-          visible={showVariantsModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowVariantsModal(false)}
-        >
-          <View style={styles.variantsModalOverlay}>
-            <View style={styles.variantsModalContent}>
-              <View style={styles.variantsModalHeader}>
-                <Text style={styles.variantsModalTitle}>{item.name}</Text>
-                <TouchableOpacity onPress={() => setShowVariantsModal(false)}>
-                  <Ionicons name="close" size={28} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.variantsModalSubtitle}>Selecciona una opción:</Text>
-              <ScrollView style={styles.variantsModalList}>
-                {variants.map((variant) => (
-                  <VariantItem
-                    key={variant.id}
-                    variant={variant}
-                    priceType={priceType}
-                    onAddToCart={() => {
-                      setShowVariantsModal(false);
-                      if (onAddToCart) onAddToCart();
-                    }}
-                  />
-                ))}
-              </ScrollView>
-            </View>
+            <Text style={styles.variantsModalSubtitle}>Selecciona una opción:</Text>
+            <ScrollView style={styles.variantsModalList}>
+              {variants.map((variant) => (
+                <VariantItem
+                  key={variant.id}
+                  variant={variant}
+                  priceType={priceType}
+                  onAddToCart={() => {
+                    setShowVariantsModal(false);
+                    if (onAddToCart) onAddToCart();
+                  }}
+                />
+              ))}
+            </ScrollView>
           </View>
-        </Modal>
-
-        {/* Imagen del producto */}
-        <TouchableOpacity onPress={() => setShowImageModal(true)}>
-          {imagePath ? (
-            <Image
-              source={{ uri: imagePath }}
-              style={styles.productImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.productImagePlaceholder}>
-              <Ionicons name="image-outline" size={40} color="#cbd5e1" />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Información del producto */}
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productSku}>SKU: {item.sku}</Text>
-          {item.category && (
-            <View style={styles.productCategory}>
-              <Ionicons name="pricetag-outline" size={12} color="#64748b" />
-              <Text style={styles.productCategoryText}>{item.category}</Text>
-            </View>
-          )}
         </View>
+      </Modal>
+
+      {/* Imagen del producto */}
+      <TouchableOpacity onPress={() => setShowImageModal(true)}>
+        {imagePath ? (
+          <Image
+            source={{ uri: imagePath }}
+            style={styles.productImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.productImagePlaceholder}>
+            <Text style={styles.productImagePlaceholderText}>📦</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Info del producto */}
+      <View style={styles.productInfo}>
+        <Text style={styles.productName} numberOfLines={2}>
+          {item.name || 'Sin nombre'}
+        </Text>
+        <Text style={styles.productSku}>SKU: {item.sku || 'N/A'}</Text>
+        {item.category && (
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
+        )}
         <View style={styles.productPricing}>
           <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
           <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
@@ -322,6 +323,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           <Ionicons name="options" size={16} color="#2563eb" />
           <Text style={styles.viewOptionsButtonText}>Ver opciones</Text>
         </TouchableOpacity>
+      </Modal>
       </View>
     );
   } catch (error) {
