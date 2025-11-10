@@ -122,22 +122,16 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       // Intentar login online primero
       try {
         const result = await loginOnline();
-        Alert.alert(
-          'Éxito',
-          `Bienvenido ${result.user.name || result.user.username}`,
-          [{ text: 'OK', onPress: onLoginSuccess }]
-        );
+        // Login exitoso - ir directamente al panel sin mensaje
+        onLoginSuccess();
       } catch (onlineError: any) {
         // Si falla online, intentar offline solo si hay credenciales guardadas
         console.log('Login online falló:', onlineError.message);
         
         try {
           const result = await loginOffline();
-          Alert.alert(
-            'Modo Offline',
-            `Bienvenido ${result.user.name || result.user.username}\n\nTrabajando sin conexión`,
-            [{ text: 'OK', onPress: onLoginSuccess }]
-          );
+          // Login offline exitoso - ir directamente al panel sin mensaje
+          onLoginSuccess();
         } catch (offlineError: any) {
           // Si ambos fallan, mostrar el error del login online (más útil)
           throw new Error(`Error de login: ${onlineError.message}`);

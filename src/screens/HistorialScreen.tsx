@@ -51,7 +51,7 @@ export default function HistorialScreen({ navigation }: any) {
       const db = getDatabase();
 
       // Get orders from both pending_orders and order_history
-      const pendingOrders = await db.getAllAsync<any>(
+      const pendingOrdersData = await db.getAllAsync<any>(
         'SELECT id, customerName, customerContact, total, createdAt, synced, "pending" as source FROM pending_orders'
       );
       
@@ -60,7 +60,7 @@ export default function HistorialScreen({ navigation }: any) {
       );
 
       // Combine both arrays
-      const allOrders = [...pendingOrders, ...historyOrders];
+      const allOrders = [...pendingOrdersData, ...historyOrders];
 
       // Filter orders from current month
       const now = new Date();
