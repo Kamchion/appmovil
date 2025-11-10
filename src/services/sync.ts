@@ -98,10 +98,10 @@ export async function syncCatalog(
       try {
       await db.runAsync(
         `INSERT OR REPLACE INTO products 
-         (id, sku, name, description, category, subcategory, image, basePrice, stock, isActive,
+         (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, isActive,
           displayOrder, parentSku, variantName, dimension, line1Text, line2Text, minQuantity,
           location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id,
           product.sku,
@@ -111,6 +111,9 @@ export async function syncCatalog(
           product.subcategory || null,
           product.image || null,
           product.basePrice,
+          product.priceCity || product.basePrice,
+          product.priceInterior || product.basePrice,
+          product.priceSpecial || product.basePrice,
           product.stock || 0,
           product.isActive !== undefined ? (product.isActive ? 1 : 0) : 1,
           product.displayOrder || null,

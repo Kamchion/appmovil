@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DB_NAME = 'vendedor_offline.db';
-const DB_VERSION = 2; // Incrementar cuando hay cambios en el esquema
+const DB_VERSION = 3; // Incrementar cuando hay cambios en el esquema
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -37,6 +37,9 @@ export async function initDatabase(): Promise<void> {
         subcategory TEXT,
         image TEXT,
         basePrice TEXT NOT NULL,
+        priceCity TEXT,
+        priceInterior TEXT,
+        priceSpecial TEXT,
         stock INTEGER DEFAULT 0,
         isActive INTEGER DEFAULT 1,
         displayOrder INTEGER,
@@ -467,7 +470,38 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
           // La columna ya existe, ignorar
         }
 
-        console.log('✅ Migración completada');
+        console.log('✅ Migración v2 completada');
+      }
+
+      // Migración v3: Agregar columnas de precios por tipo
+      if (currentVersion < 3) {
+        console.log('🔄 Aplicando migración v3: Agregando columnas de precios...');
+        
+        try {
+          await database.execAsync(`
+            ALTER TABLE products ADD COLUMN priceCity TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE products ADD COLUMN priceInterior TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE products ADD COLUMN priceSpecial TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        console.log('✅ Migración v3 completada');
       }
     }
   } catch (error) {

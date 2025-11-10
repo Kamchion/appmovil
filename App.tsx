@@ -27,49 +27,7 @@ import { initDatabase, resetDatabase } from './src/database/db';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-/**
- * Tab Navigator para el catálogo (mantener compatibilidad)
- */
-function CatalogTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#e2e8f0',
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-      }}
-    >
-      <Tab.Screen
-        name="CatalogTab"
-        component={CatalogScreen}
-        options={{
-          tabBarLabel: 'Catálogo',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📦</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="OrdersTab"
-        component={OrdersScreen}
-        options={{
-          tabBarLabel: 'Pedidos',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📋</Text>,
-        }}
-      />
-    </Tab.Navigator>
-  );
-}
+// Tab Navigator eliminado - navegación directa al catálogo
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -272,13 +230,12 @@ export default function App() {
                 }}
               />
 
-              {/* Catálogo (con tabs) */}
+              {/* Catálogo */}
               <Stack.Screen
                 name="CatalogTabs"
-                component={CatalogTabs}
+                component={CatalogScreen}
                 options={{ 
-                  title: 'Catálogo de Productos',
-                  headerShown: true,
+                  headerShown: false,
                 }}
               />
 

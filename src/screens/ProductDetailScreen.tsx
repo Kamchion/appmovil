@@ -12,6 +12,8 @@ import {
 import { Product } from '../types';
 import { addToCart } from '../services/cart';
 import { getCachedImagePath } from '../services/imageCache';
+import { getProductPrice, type PriceType } from '../utils/priceUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ProductDetailScreenProps {
   route: {
@@ -30,10 +32,24 @@ export default function ProductDetailScreen({
   const [quantity, setQuantity] = useState((product.minQuantity || product.minimumQuantity || 1).toString());
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [priceType, setPriceType] = useState<PriceType>('ciudad');
 
   useEffect(() => {
     loadImage();
+    loadPriceType();
   }, []);
+
+  const loadPriceType = async () => {
+    try {
+      const clientData = await AsyncStorage.getItem('selected_client');
+      if (clientData) {
+        const client = JSON.parse(clientData);
+        setPriceType(client.priceType || 'ciudad');
+      }
+    } catch (error) {
+      console.error('Error al cargar tipo de precio:', error);
+    }
+  };
 
   const loadImage = async () => {
     if (product.image) {
@@ -63,16 +79,8 @@ export default function ProductDetailScreen({
 
     try {
       await addToCart(product, qty);
-      Alert.alert('Éxito', 'Producto agregado al carrito', [
-        {
-          text: 'Ver carrito',
-          onPress: () => navigation.navigate('Cart'),
-        },
-        {
-          text: 'Continuar comprando',
-          style: 'cancel',
-        },
-      ]);
+      // Eliminado pop-up innecesario, volver al catálogo
+      navigation.goBack();
     } catch (error) {
       Alert.alert('Error', 'No se pudo agregar al carrito');
     } finally {
@@ -118,7 +126,7 @@ export default function ProductDetailScreen({
         )}
 
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>${product.price || product.basePrice}</Text>
+          <Text style={styles.price}>${getProductPrice(product, priceType)}</Text>
           <Text style={styles.stock}>Stock: {product.stock || 0}</Text>
         </View>
 
@@ -162,7 +170,7 @@ export default function ProductDetailScreen({
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Total:</Text>
           <Text style={styles.totalAmount}>
-            ${(parseFloat(product.price || product.basePrice) * (parseInt(quantity) || 0)).toFixed(2)}
+            ${(parseFloat(getProductPrice(product, priceType)) * (parseInt(quantity) || 0)).toFixed(2)}
           </Text>
         </View>
 

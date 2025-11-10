@@ -239,10 +239,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
 
-                Alert.alert('✅ Pedido Enviado', `Pedido ${result.orderNumber} creado y enviado.\n\nSe ha enviado un correo de confirmación.`, [
-                  { text: 'Ver Pedidos', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Orders'); } },
-                  { text: 'Crear Otro Pedido', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Pedidos'); } },
-                ]);
+                // Redireccionar al dashboard de vendedores
+                navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] });
 
               } catch (apiError: any) {
                 console.log('⚠️ Guardando localmente...');
@@ -265,10 +263,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
 
-                Alert.alert('✅ Pedido Guardado', `Pedido ${orderId} guardado localmente.\n\nSe sincronizará cuando haya conexión.`, [
-                  { text: 'Ver Pedidos', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Orders'); } },
-                  { text: 'Crear Otro Pedido', onPress: () => { navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); navigation.navigate('Pedidos'); } },
-                ]);
+                // Redireccionar al dashboard de vendedores
+                navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] });
               }
             } catch (error: any) {
               console.error('❌ Error:', error);

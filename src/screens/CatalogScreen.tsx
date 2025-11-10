@@ -19,37 +19,128 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { addToCart } from '../services/cart';
 import { Modal } from 'react-native';
+import { getProductPrice, formatPrice, type PriceType } from '../utils/priceUtils';
 
 interface CatalogScreenProps {
   navigation: any;
 }
 
+// Componente para cada variante en el modal
+const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; priceType?: string; onAddToCart: () => void }) => {
+  const [quantity, setQuantity] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const displayPrice = getProductPrice(variant, (priceType as PriceType) || 'ciudad');
+
+  const incrementQuantity = () => {
+    const minQty = variant.minQuantity || 1;
+    if (quantity === 0) {
+      setQuantity(minQty);
+    } else {
+      setQuantity(prev => prev + 1);
+    }
+  };
+
+  const decrementQuantity = () => {
+    const minQty = variant.minQuantity || 1;
+    if (quantity > minQty) {
+      setQuantity(prev => prev - 1);
+    } else if (quantity === minQty) {
+      setQuantity(0);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (adding || quantity === 0) return;
+    
+    setAdding(true);
+    try {
+      const productWithPrice = {
+        ...variant,
+        price: displayPrice.toString(),
+      };
+      
+      await addToCart(productWithPrice, quantity);
+      setQuantity(0);
+      onAddToCart();
+    } catch (error) {
+      console.error('Error al agregar variante al carrito:', error);
+      Alert.alert('Error', 'No se pudo agregar al carrito');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <View style={styles.variantItem}>
+      <View style={styles.variantInfo}>
+        <Text style={styles.variantName}>{variant.variantName || variant.name}</Text>
+        <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
+        <Text style={styles.variantPrice}>${displayPrice}</Text>
+        <Text style={styles.variantStock}>Stock: {variant.stock || 0}</Text>
+      </View>
+      <View style={styles.variantControls}>
+        <View style={styles.variantQuantityContainer}>
+          <TouchableOpacity
+            style={styles.variantQuantityButton}
+            onPress={decrementQuantity}
+          >
+            <Ionicons name="remove" size={16} color="#64748b" />
+          </TouchableOpacity>
+          <Text style={styles.variantQuantityText}>{quantity}</Text>
+          <TouchableOpacity
+            style={styles.variantQuantityButton}
+            onPress={incrementQuantity}
+          >
+            <Ionicons name="add" size={16} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={[styles.variantAddButton, (adding || quantity === 0) && styles.variantAddButtonDisabled]}
+          onPress={handleAddToCart}
+          disabled={adding || quantity === 0}
+        >
+          <Ionicons name="cart" size={16} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 // Componente separado para ProductCard para evitar problemas con hooks
 const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { item: Product; navigation: any; priceType?: string; onAddToCart?: () => void }) => {
   const [imagePath, setImagePath] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(item.minQuantity || 1);
+  const [quantity, setQuantity] = useState(0);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  const [variants, setVariants] = useState<Product[]>([]);
+  const [hasVariants, setHasVariants] = useState(false);
   const [adding, setAdding] = useState(false);
   
-  // Calcular precio según tipo de cliente
-  const getPrice = () => {
-    if (!priceType || priceType === 'ciudad') {
-      return item.price || item.basePrice;
-    } else if (priceType === 'interior') {
-      return item.interiorPrice || item.price || item.basePrice;
-    } else if (priceType === 'especial') {
-      return item.specialPrice || item.price || item.basePrice;
-    }
-    return item.basePrice;
-  };
-  
-  const displayPrice = getPrice();
+  // Calcular precio según tipo de cliente usando la utilidad
+  const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
 
   useEffect(() => {
     if (item?.image) {
       getCachedImagePath(item.image).then(setImagePath).catch(() => setImagePath(null));
     }
-  }, [item?.image]);
+    loadVariants();
+  }, [item?.image, item?.sku]);
+
+  const loadVariants = async () => {
+    try {
+      const db = getDatabase();
+      const result = await db.getAllAsync<Product>(
+        'SELECT * FROM products WHERE parentSku = ? AND isActive = 1 ORDER BY displayOrder ASC, name ASC',
+        [item.sku]
+      );
+      if (result.length > 0) {
+        setVariants(result);
+        setHasVariants(true);
+      }
+    } catch (error) {
+      console.error('Error al cargar variantes:', error);
+    }
+  };
 
   // Validar que item tenga los datos mínimos requeridos
   if (!item || !item.id || !item.name || !item.sku) {
@@ -68,7 +159,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
       };
       
       await addToCart(productWithPrice, quantity);
-      Alert.alert('✅ Agregado', `${quantity} × ${item.name} agregado al carrito`);
+      // Eliminado pop-up innecesario
       
       // Resetear cantidad
       setQuantity(item.minQuantity || 1);
@@ -84,13 +175,20 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   };
 
   const incrementQuantity = () => {
-    setQuantity(prev => prev + 1);
+    const minQty = item.minQuantity || 1;
+    if (quantity === 0) {
+      setQuantity(minQty);
+    } else {
+      setQuantity(prev => prev + 1);
+    }
   };
 
   const decrementQuantity = () => {
     const minQty = item.minQuantity || 1;
     if (quantity > minQty) {
       setQuantity(prev => prev - 1);
+    } else if (quantity === minQty) {
+      setQuantity(0);
     }
   };
 
@@ -128,6 +226,39 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
         </TouchableOpacity>
       </Modal>
 
+      {/* Modal de variantes */}
+      <Modal
+        visible={showVariantsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowVariantsModal(false)}
+      >
+        <View style={styles.variantsModalOverlay}>
+          <View style={styles.variantsModalContent}>
+            <View style={styles.variantsModalHeader}>
+              <Text style={styles.variantsModalTitle}>{item.name}</Text>
+              <TouchableOpacity onPress={() => setShowVariantsModal(false)}>
+                <Ionicons name="close" size={28} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.variantsModalSubtitle}>Selecciona una opción:</Text>
+            <ScrollView style={styles.variantsModalList}>
+              {variants.map((variant) => (
+                <VariantItem
+                  key={variant.id}
+                  variant={variant}
+                  priceType={priceType}
+                  onAddToCart={() => {
+                    setShowVariantsModal(false);
+                    if (onAddToCart) onAddToCart();
+                  }}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Imagen del producto */}
       <TouchableOpacity onPress={() => setShowImageModal(true)}>
         {imagePath ? (
@@ -159,36 +290,49 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
 
-        {/* Controles de cantidad */}
-        <View style={styles.quantityContainer}>
+        {/* Si tiene variantes, mostrar botón "Ver opciones" */}
+        {hasVariants ? (
           <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={decrementQuantity}
+            style={styles.viewOptionsButton}
+            onPress={() => setShowVariantsModal(true)}
           >
-            <Ionicons name="remove" size={16} color="#64748b" />
+            <Ionicons name="options" size={16} color="#2563eb" />
+            <Text style={styles.viewOptionsButtonText}>Ver opciones ({variants.length})</Text>
           </TouchableOpacity>
-          
-          <Text style={styles.quantityText}>{quantity}</Text>
-          
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={incrementQuantity}
-          >
-            <Ionicons name="add" size={16} color="#64748b" />
-          </TouchableOpacity>
-        </View>
+        ) : (
+          <>
+            {/* Controles de cantidad */}
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={decrementQuantity}
+              >
+                <Ionicons name="remove" size={16} color="#64748b" />
+              </TouchableOpacity>
+              
+              <Text style={styles.quantityText}>{quantity}</Text>
+              
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={incrementQuantity}
+              >
+                <Ionicons name="add" size={16} color="#64748b" />
+              </TouchableOpacity>
+            </View>
 
-        {/* Botón agregar al carrito */}
-        <TouchableOpacity
-          style={[styles.addToCartButton, adding && styles.addToCartButtonDisabled]}
-          onPress={handleAddToCart}
-          disabled={adding}
-        >
-          <Ionicons name="cart" size={16} color="#ffffff" />
-          <Text style={styles.addToCartButtonText}>
-            {adding ? 'Agregando...' : 'Agregar'}
-          </Text>
-        </TouchableOpacity>
+            {/* Botón agregar al carrito */}
+            <TouchableOpacity
+              style={[styles.addToCartButton, adding && styles.addToCartButtonDisabled]}
+              onPress={handleAddToCart}
+              disabled={adding || quantity === 0}
+            >
+              <Ionicons name="cart" size={16} color="#ffffff" />
+              <Text style={styles.addToCartButtonText}>
+                {adding ? 'Agregando...' : 'Agregar'}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -197,6 +341,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
 export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cartCount, setCartCount] = useState({ lines: 0, items: 0 });
+  const [cartTotal, setCartTotal] = useState('0.00');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,6 +349,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [isOnline, setIsOnline] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
   useEffect(() => {
@@ -255,6 +401,19 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
           items: result[0].items || 0,
         });
       }
+      
+      // Calcular total del carrito
+      const cartItems = await db.getAllAsync<any>(
+        'SELECT c.quantity, p.basePrice, p.priceCity, p.priceInterior, p.priceSpecial FROM cart c JOIN products p ON c.productId = p.id'
+      );
+      let total = 0;
+      cartItems.forEach(item => {
+        const price = selectedClient?.priceType === 'interior' ? (item.priceInterior || item.basePrice) :
+                      selectedClient?.priceType === 'especial' ? (item.priceSpecial || item.basePrice) :
+                      (item.priceCity || item.basePrice);
+        total += parseFloat(price) * item.quantity;
+      });
+      setCartTotal(total.toFixed(2));
     } catch (error) {
       console.error('Error al cargar contador de carrito:', error);
     }
@@ -412,53 +571,93 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Catálogo</Text>
-            <Text style={styles.headerSubtitle}>
-              {filteredProducts.length} de {products.length} productos
-            </Text>
+      {/* Barra Superior Azul con Carrito */}
+      <View style={styles.topBar}>
+        <Text style={styles.topBarTitle}>Catálogo</Text>
+        <View style={styles.topBarRight}>
+          <View style={styles.topBarCartInfo}>
+            <Text style={styles.topBarCartText}>{cartCount.lines} líneas</Text>
+            <Text style={styles.topBarCartText}>${cartTotal}</Text>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.cartButton}
-              onPress={() => navigation.navigate('Cart')}
-            >
-              <Ionicons name="cart" size={24} color="#2563eb" />
-              {cartCount.lines > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartCount.lines}</Text>
+          <TouchableOpacity
+            style={styles.topBarCartButton}
+            onPress={() => navigation.navigate('Cart')}
+          >
+            <Ionicons name="cart" size={24} color="#ffffff" />
+            {cartCount.lines > 0 && (
+              <View style={styles.topBarCartBadge}>
+                <Text style={styles.topBarCartBadgeText}>{cartCount.lines}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Barra de Búsqueda y Categorías */}
+      <View style={styles.searchBar}>
+
+        <View style={styles.searchRow}>
+          {/* Dropdown de Categorías */}
+          {categories.length > 0 && (
+            <View style={styles.categoryDropdownContainer}>
+              <TouchableOpacity 
+                style={styles.categoryDropdown}
+                onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              >
+                <Text style={styles.categoryDropdownText}>
+                  {selectedCategory || 'Categorías'}
+                </Text>
+                <Ionicons name={showCategoryDropdown ? "chevron-up" : "chevron-down"} size={20} color="#666" />
+              </TouchableOpacity>
+              {showCategoryDropdown && (
+                <View style={styles.categoryDropdownMenu}>
+                  <TouchableOpacity
+                    style={styles.categoryDropdownItem}
+                    onPress={() => {
+                      setSelectedCategory('');
+                      setShowCategoryDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryDropdownItemText, !selectedCategory && styles.categoryDropdownItemTextActive]}>
+                      Todas
+                    </Text>
+                  </TouchableOpacity>
+                  {categories.map((category) => (
+                    <TouchableOpacity
+                      key={category}
+                      style={styles.categoryDropdownItem}
+                      onPress={() => {
+                        setSelectedCategory(category);
+                        setShowCategoryDropdown(false);
+                      }}
+                    >
+                      <Text style={[styles.categoryDropdownItemText, selectedCategory === category && styles.categoryDropdownItemTextActive]}>
+                        {category}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               )}
-            </TouchableOpacity>
-            <View style={styles.cartInfo}>
-              <Text style={styles.cartInfoText}>{cartCount.lines} líneas</Text>
-              <Text style={styles.cartInfoText}>{cartCount.items} items</Text>
             </View>
+          )}
+          
+          {/* Campo de Búsqueda */}
+          <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Text style={styles.clearButton}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar por nombre, SKU o descripción..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={styles.clearButton}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Category Filters */}
-        {categories.length > 0 && renderCategoryFilter()}
       </View>
 
       {/* Product List */}
@@ -504,6 +703,60 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
+  topBar: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  topBarTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  topBarCartInfo: {
+    alignItems: 'flex-end',
+  },
+  topBarCartText: {
+    fontSize: 11,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  topBarCartButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  topBarCartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  topBarCartBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  searchBar: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
   header: {
     backgroundColor: '#ffffff',
     paddingHorizontal: 16,
@@ -517,6 +770,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  headerLeft: {
+    flex: 1,
   },
   headerRight: {
     flexDirection: 'row',
@@ -577,13 +833,70 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryDropdownContainer: {
+    position: 'relative',
+    width: 140,
+  },
+  categoryDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  categoryDropdownText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+    flex: 1,
+  },
+  categoryDropdownMenu: {
+    position: 'absolute',
+    top: 42,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 1000,
+    maxHeight: 300,
+  },
+  categoryDropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  categoryDropdownItemText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  categoryDropdownItemTextActive: {
+    color: '#2563eb',
+    fontWeight: '600',
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f3f4f6',
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginBottom: 12,
   },
   searchIcon: {
     fontSize: 16,
@@ -647,12 +960,13 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 150,
-    resizeMode: 'cover',
+    aspectRatio: 1,
+    resizeMode: 'contain',
+    backgroundColor: '#f9fafb',
   },
   productImagePlaceholder: {
     width: '100%',
-    height: 150,
+    aspectRatio: 1,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
@@ -788,5 +1102,120 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     textAlign: 'center',
+  },
+  viewOptionsButton: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    borderRadius: 6,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  viewOptionsButtonText: {
+    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  variantsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  variantsModalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  variantsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  variantsModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    flex: 1,
+  },
+  variantsModalSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  variantsModalList: {
+    paddingHorizontal: 20,
+  },
+  variantItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  variantInfo: {
+    flex: 1,
+  },
+  variantName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  variantSku: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  variantPrice: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2563eb',
+    marginTop: 4,
+  },
+  variantStock: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  variantControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  variantQuantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+  },
+  variantQuantityButton: {
+    padding: 6,
+  },
+  variantQuantityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  variantAddButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    padding: 8,
+  },
+  variantAddButtonDisabled: {
+    opacity: 0.4,
   },
 });

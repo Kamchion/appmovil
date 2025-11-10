@@ -112,17 +112,8 @@ export default function PedidosScreen({ navigation }: any) {
       // Cerrar diálogo
       setShowClientDialog(false);
       
-      // Navegar al catálogo para hacer el pedido
-      Alert.alert(
-        '✅ Cliente seleccionado',
-        `Ahora puedes agregar productos para ${client.companyName || client.contactPerson}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('CatalogTabs')
-          }
-        ]
-      );
+      // Navegar al catálogo directamente sin pop-up
+      navigation.navigate('CatalogTabs');
     } catch (error) {
       console.error('❌ Error al seleccionar cliente:', error);
       Alert.alert('Error', 'No se pudo seleccionar el cliente');
