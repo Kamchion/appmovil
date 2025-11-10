@@ -1228,7 +1228,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
+    maxHeight: '90%',
     paddingBottom: 20,
   },
   variantsModalHeader: {
