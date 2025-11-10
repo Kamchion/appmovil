@@ -36,7 +36,15 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
   
   const [quantity, setQuantity] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [imagePath, setImagePath] = useState<string | null>(null);
   const displayPrice = getProductPrice(variant, (priceType as PriceType) || 'ciudad');
+  
+  // Cargar imagen de la variante
+  useEffect(() => {
+    if (variant?.image) {
+      getCachedImagePath(variant.image).then(setImagePath).catch(() => setImagePath(null));
+    }
+  }, [variant?.image]);
 
   const incrementQuantity = () => {
     const minQty = variant.minQuantity || 1;
@@ -79,6 +87,12 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
 
   return (
     <View style={styles.variantItem}>
+      {imagePath && (
+        <Image 
+          source={{ uri: imagePath }} 
+          style={styles.variantImage} 
+        />
+      )}
       <View style={styles.variantInfo}>
         <Text style={styles.variantName}>{variant.variantName || variant.name}</Text>
         <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
@@ -1249,6 +1263,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+  },
+  variantImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#f3f4f6',
   },
   variantInfo: {
     flex: 1,
