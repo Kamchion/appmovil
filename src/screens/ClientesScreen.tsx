@@ -16,7 +16,7 @@ import { getDatabase } from '../database/db';
 import * as Location from 'expo-location';
 
 interface Client {
-  id: number;
+  id: string;
   name: string;
   companyName: string;
   email: string;

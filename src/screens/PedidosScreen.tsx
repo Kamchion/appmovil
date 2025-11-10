@@ -19,7 +19,7 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Client {
-  id: number;
+  id: string;
   name: string;
   companyName: string;
   contactPerson: string;
@@ -106,7 +106,7 @@ export default function PedidosScreen({ navigation }: any) {
       console.log('👤 Cliente seleccionado:', client.id, client.companyName);
       
       // Guardar cliente seleccionado en AsyncStorage
-      await AsyncStorage.setItem('selectedClientId', client.id.toString());
+      await AsyncStorage.setItem('selectedClientId', client.id);
       await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
       
       // Cerrar diálogo
