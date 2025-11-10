@@ -79,10 +79,118 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
       minute: '2-digit',
     });
 
+    const handleOrderPress = () => {
+      // Si el pedido NO está sincronizado (pendiente por enviar)
+      if (!item.synced) {
+        Alert.alert(
+          'Pedido Pendiente',
+          `Pedido #${item.id.slice(-8)}\nCliente: ${item.customerName}\nTotal: $${item.total}\n\n¿Qué deseas hacer?`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Continuar Pedido',
+              onPress: async () => {
+                // Cargar items del pedido al carrito
+                try {
+                  const db = getDatabase();
+                  const items = await db.getAllAsync(
+                    'SELECT * FROM pending_order_items WHERE orderId = ?',
+                    [item.id]
+                  );
+
+                  // Limpiar carrito actual
+                  await db.runAsync('DELETE FROM cart');
+
+                  // Agregar items al carrito
+                  for (const orderItem of items) {
+                    await db.runAsync(
+                      `INSERT INTO cart (productId, quantity, createdAt) VALUES (?, ?, ?)`,
+                      [orderItem.productId, orderItem.quantity, new Date().toISOString()]
+                    );
+                  }
+
+                  // Establecer cliente seleccionado
+                  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                  await AsyncStorage.setItem('selectedClientId', item.clientId);
+
+                  // Borrar pedido pendiente
+                  await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [item.id]);
+                  await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [item.id]);
+
+                  // Navegar al carrito
+                  navigation.navigate('Cart');
+                  Alert.alert('Éxito', 'Pedido cargado en el carrito. Puedes continuar comprando.');
+                } catch (error: any) {
+                  console.error('❌ Error al cargar pedido:', error);
+                  Alert.alert('Error', 'No se pudo cargar el pedido: ' + error.message);
+                }
+              },
+            },
+            {
+              text: 'Enviar sin Seguir Comprando',
+              onPress: async () => {
+                // Enviar pedido directamente
+                try {
+                  const { createOrderOnline } = require('../services/api');
+                  const db = getDatabase();
+                  
+                  // Obtener items del pedido
+                  const items = await db.getAllAsync(
+                    'SELECT * FROM pending_order_items WHERE orderId = ?',
+                    [item.id]
+                  );
+
+                  // Obtener productos para construir el cart
+                  const cart = [];
+                  for (const orderItem of items) {
+                    const product = await db.getAllAsync(
+                      'SELECT * FROM products WHERE id = ?',
+                      [orderItem.productId]
+                    );
+                    if (product.length > 0) {
+                      cart.push({
+                        product: {
+                          id: product[0].id,
+                          name: product[0].name,
+                          sku: product[0].sku,
+                          price: orderItem.pricePerUnit,
+                        },
+                        quantity: orderItem.quantity,
+                      });
+                    }
+                  }
+
+                  // Enviar pedido al backend
+                  const result = await createOrderOnline({
+                    cart,
+                    customerNote: item.customerNote || '',
+                    selectedClientId: item.clientId,
+                  });
+
+                  // Borrar pedido pendiente
+                  await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [item.id]);
+                  await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [item.id]);
+
+                  Alert.alert('Éxito', 'Pedido enviado correctamente');
+                  await loadOrders();
+                } catch (error: any) {
+                  console.error('❌ Error al enviar pedido:', error);
+                  Alert.alert('Error', 'No se pudo enviar el pedido: ' + error.message);
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        // Si está sincronizado, mostrar detalle
+        navigation.navigate('OrderDetail', { orderId: item.id });
+      }
+    };
+
     return (
       <TouchableOpacity
         style={styles.orderCard}
-        onPress={() => navigation.navigate('OrderDetail', { orderId: item.id })}
+        onPress={handleOrderPress}
       >
         <View style={styles.orderHeader}>
           <View>

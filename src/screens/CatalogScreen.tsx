@@ -633,6 +633,36 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     setRefreshing(false);
   };
 
+  const handleGoBack = () => {
+    // Si hay productos en el carrito, advertir antes de salir
+    if (cartCount.lines > 0) {
+      Alert.alert(
+        'Advertencia',
+        'Tienes productos en el carrito. Si sales, se borrará todo el pedido. ¿Deseas continuar?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+          },
+          {
+            text: 'Salir y Borrar',
+            style: 'destructive',
+            onPress: async () => {
+              // Borrar el carrito
+              const db = getDatabase();
+              await db.runAsync('DELETE FROM cart');
+              // Regresar al panel principal
+              navigation.navigate('Home');
+            },
+          },
+        ]
+      );
+    } else {
+      // Si no hay productos, salir directamente
+      navigation.navigate('Home');
+    }
+  };
+
   const renderProduct = ({ item }: { item: Product }) => (
     <ProductCard 
       item={item} 
@@ -695,7 +725,12 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     <View style={styles.container}>
       {/* Barra Superior Azul con Carrito */}
       <View style={styles.topBar}>
-        <Text style={styles.topBarTitle}>Catálogo</Text>
+        <TouchableOpacity
+          style={styles.topBarBackButton}
+          onPress={handleGoBack}
+        >
+          <Ionicons name="arrow-back" size={24} color="#ffffff" />
+        </TouchableOpacity>
         <View style={styles.topBarRight}>
           <View style={styles.topBarCartInfo}>
             <Text style={styles.topBarCartText}>{cartCount.lines} líneas</Text>
@@ -833,6 +868,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  topBarBackButton: {
+    padding: 4,
   },
   topBarTitle: {
     fontSize: 20,

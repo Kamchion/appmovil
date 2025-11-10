@@ -195,6 +195,70 @@ export default function CartScreen({ navigation }: CartScreenProps) {
     );
   };
 
+  const handleSaveWithoutSending = async () => {
+    if (cart.length === 0) {
+      Alert.alert('Carrito vacío', 'No hay productos en el carrito');
+      return;
+    }
+
+    if (!selectedClient) {
+      Alert.alert('Cliente no asignado', '¿Deseas asignar un cliente a este pedido?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Asignar Cliente', onPress: () => navigation.navigate('Pedidos') }
+      ]);
+      return;
+    }
+
+    Alert.alert(
+      'Guardar Pedido',
+      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas guardar este pedido para continuar más tarde?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Guardar',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { getDatabase } = require('../database/db');
+              const db = getDatabase();
+              const orderId = `PENDING-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+              const now = new Date().toISOString();
+
+              // Guardar pedido pendiente en la base de datos local
+              await db.runAsync(
+                `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'pending', now]
+              );
+
+              // Guardar items del pedido
+              for (const item of cart) {
+                const itemId = `${orderId}-${item.product.id}`;
+                await db.runAsync(
+                  `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                );
+              }
+
+              // Limpiar carrito y cliente seleccionado
+              await clearCart();
+              await AsyncStorage.removeItem('selectedClientId');
+              await AsyncStorage.removeItem('selectedClientData');
+
+              Alert.alert('Éxito', 'Pedido guardado. Puedes continuar más tarde desde el historial.', [
+                { text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] }) }
+              ]);
+            } catch (error: any) {
+              console.error('❌ Error al guardar pedido:', error);
+              Alert.alert('Error', 'No se pudo guardar el pedido: ' + error.message);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       Alert.alert('Carrito vacío', 'Agrega productos antes de realizar el pedido');
@@ -404,6 +468,16 @@ export default function CartScreen({ navigation }: CartScreenProps) {
               <Text style={styles.checkoutButtonText}>
                 {loading ? 'ENVIANDO...' : 'ENVIAR PEDIDO'}
               </Text>
+            </TouchableOpacity>
+
+            {/* Guardar sin Enviar */}
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveWithoutSending}
+              disabled={loading}
+            >
+              <Ionicons name="save-outline" size={18} color="#2563eb" />
+              <Text style={styles.saveButtonText}>GUARDAR SIN ENVIAR</Text>
             </TouchableOpacity>
 
             {/* Seguir Comprando */}
@@ -644,6 +718,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  saveButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563eb',
     letterSpacing: 0.5,
   },
   continueShoppingButton: {
