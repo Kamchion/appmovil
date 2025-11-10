@@ -182,8 +182,8 @@ export default function ClientesScreen() {
       email: client.email || '',
       phone: client.phone || '',
       address: client.address || '',
-      companyTaxId: '',
-      gpsLocation: '',
+      companyTaxId: (client as any).companyTaxId || '',
+      gpsLocation: (client as any).gpsLocation || '',
       priceType: (client.priceType as any) || 'ciudad',
     });
     setShowEditClientDialog(true);
@@ -202,7 +202,8 @@ export default function ClientesScreen() {
       
       await db.runAsync(
         `UPDATE clients 
-         SET name = ?, companyName = ?, email = ?, phone = ?, address = ?, clientNumber = ?, priceType = ?, modifiedAt = ?, needsSync = 1
+         SET name = ?, companyName = ?, email = ?, phone = ?, address = ?, clientNumber = ?, priceType = ?, 
+             companyTaxId = ?, gpsLocation = ?, modifiedAt = ?, needsSync = 1
          WHERE id = ?`,
         [
           formData.contactPerson,
@@ -212,6 +213,8 @@ export default function ClientesScreen() {
           formData.address || '',
           formData.clientNumber,
           formData.priceType,
+          formData.companyTaxId || '',
+          formData.gpsLocation || '',
           new Date().toISOString(),
           editingClient!.id,
         ]
