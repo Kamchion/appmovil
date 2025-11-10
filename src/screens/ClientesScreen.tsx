@@ -200,6 +200,8 @@ export default function ClientesScreen() {
     try {
       const db = getDatabase();
       
+      const now = new Date().toISOString();
+      
       await db.runAsync(
         `UPDATE clients 
          SET name = ?, companyName = ?, email = ?, phone = ?, address = ?, clientNumber = ?, priceType = ?, 
@@ -215,10 +217,42 @@ export default function ClientesScreen() {
           formData.priceType,
           formData.companyTaxId || '',
           formData.gpsLocation || '',
-          new Date().toISOString(),
+          now,
           editingClient!.id,
         ]
       );
+
+      // Intentar sincronizar inmediatamente con el servidor
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const { updateClientOnServer } = require('../services/api-client-update');
+        
+        const token = await AsyncStorage.getItem('vendor_token');
+        if (token) {
+          console.log('🔄 Sincronizando cliente con servidor...');
+          await updateClientOnServer(token, editingClient!.id, {
+            name: formData.contactPerson,
+            companyName: formData.companyName,
+            email: formData.email || '',
+            phone: formData.phone,
+            address: formData.address || '',
+            companyTaxId: formData.companyTaxId || '',
+            gpsLocation: formData.gpsLocation || '',
+            priceType: formData.priceType,
+          });
+          
+          // Marcar como sincronizado
+          await db.runAsync(
+            `UPDATE clients SET needsSync = 0, syncedAt = ? WHERE id = ?`,
+            [now, editingClient!.id]
+          );
+          
+          console.log('✅ Cliente sincronizado con servidor exitosamente');
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Error al sincronizar con servidor (se intentará en próxima sincronización):', syncError);
+        // No mostrar error al usuario, se sincronizará después
+      }
 
       Alert.alert('Éxito', 'Cliente actualizado exitosamente');
       setShowEditClientDialog(false);

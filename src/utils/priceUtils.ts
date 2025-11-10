@@ -36,6 +36,12 @@ export interface Product {
  * // Returns: "1.50"
  */
 export function getProductPrice(product: Product, priceType: PriceType): string {
+  // Validación defensiva: verificar que product existe
+  if (!product) {
+    console.error('[getProductPrice] Product is null or undefined');
+    return '0.00';
+  }
+  
   // Seleccionar el precio según el tipo de cliente
   if (priceType === 'ciudad' && product.priceCity) {
     return product.priceCity;
@@ -50,6 +56,12 @@ export function getProductPrice(product: Product, priceType: PriceType): string 
   }
   
   // Fallback: Si no existe el precio específico, usar basePrice
+  // Validación adicional para evitar crash
+  if (!product.basePrice) {
+    console.error('[getProductPrice] Product has no basePrice:', product.sku || product.id);
+    return '0.00';
+  }
+  
   return product.basePrice;
 }
 
