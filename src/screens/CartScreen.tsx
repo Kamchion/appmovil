@@ -299,9 +299,33 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                   selectedClientId: selectedClient.id.toString(),
                 });
 
+                // ✅ Guardar pedido en order_history local
+                const orderId = result.orderId || `ORD-${Date.now()}`;
+                const now = new Date().toISOString();
+                
+                console.log('💾 Guardando pedido en historial local...');
+                await db.runAsync(
+                  `INSERT INTO order_history (id, orderNumber, customerName, customerContact, subtotal, tax, total, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    orderId,
+                    orderId,
+                    selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
+                    selectedClient.phone || selectedClient.email || '',
+                    subtotal.toString(),
+                    tax.toString(),
+                    total.toString(),
+                    'completed',
+                    now
+                  ]
+                );
+                
+                console.log('✅ Pedido guardado en historial local');
+
                 await clearCart();
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
+
+                Alert.alert('✅ Éxito', 'Pedido enviado y guardado correctamente');
 
                 // Redireccionar al dashboard de vendedores
                 navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] });

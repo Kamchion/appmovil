@@ -520,15 +520,48 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         return;
       }
       
-      // Filtrar productos principales (sin parentSku) y variantes ocultas
-      const result = await db.getAllAsync<Product>(
+      // Cargar todos los productos activos sin parentSku (productos principales y padres)
+      const allMainProducts = await db.getAllAsync<Product>(
         `SELECT * FROM products 
          WHERE isActive = 1 
-         AND hideInCatalog = 0 
          AND (parentSku IS NULL OR parentSku = '') 
          ORDER BY displayOrder ASC, name ASC`
       );
-      console.log(`✅ ${result.length} productos cargados exitosamente`);
+      
+      // Filtrar productos basándose en lógica de visibilidad:
+      // - Productos simples (sin variantes): mostrar si hideInCatalog = 0
+      // - Productos padre (con variantes): mostrar si al menos una variante tiene hideInCatalog = 0
+      const result = [];
+      
+      for (const product of allMainProducts) {
+        // Verificar si este producto tiene variantes
+        const variants = await db.getAllAsync<Product>(
+          `SELECT hideInCatalog FROM products 
+           WHERE parentSku = ? AND isActive = 1`,
+          [product.sku]
+        );
+        
+        if (variants.length > 0) {
+          // Es un producto padre - mostrar si al menos una variante es visible
+          const hasVisibleVariant = variants.some(v => v.hideInCatalog === 0);
+          if (hasVisibleVariant) {
+            result.push(product);
+            console.log(`✅ Producto padre con variantes visibles: ${product.name} (${product.sku})`);
+          } else {
+            console.log(`⏭️ Producto padre sin variantes visibles: ${product.name} (${product.sku})`);
+          }
+        } else {
+          // Es un producto simple (sin variantes) - mostrar si no está oculto
+          if (product.hideInCatalog === 0) {
+            result.push(product);
+          }
+        }
+      }
+      
+      console.log(`✅ ${result.length} productos cargados exitosamente (de ${allMainProducts.length} productos principales)`);
+      console.log(`   - Productos simples visibles: ${result.filter(p => !allMainProducts.find(m => m.parentSku === p.sku)).length}`);
+      console.log(`   - Productos padre con variantes visibles: ${result.filter(p => allMainProducts.find(m => m.parentSku === p.sku)).length}`);
+      
       
       // 🔍 DEBUG: Verificar productos SPRAY
       const sprayProducts = await db.getAllAsync<Product>(
