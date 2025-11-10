@@ -131,8 +131,26 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     if (item?.image) {
       getCachedImagePath(item.image).then(setImagePath).catch(() => setImagePath(null));
     }
-    // NO cargar variantes automáticamente - solo cuando el usuario haga clic
-  }, [item?.image]);
+    // Verificar si tiene variantes
+    checkHasVariants();
+  }, [item?.image, item?.sku]);
+
+  const checkHasVariants = async () => {
+    try {
+      const db = getDatabase();
+      const result = await db.getAllAsync<{count: number}>(
+        'SELECT COUNT(*) as count FROM products WHERE parentSku = ? AND isActive = 1',
+        [item.sku]
+      );
+      
+      const count = result[0]?.count || 0;
+      setHasVariants(count > 0);
+    } catch (error) {
+      console.error('Error al verificar variantes:', error);
+      setHasVariants(false);
+    }
+  };
+
 
   const loadVariants = async () => {
     // Si ya se cargaron, no volver a cargar
@@ -288,7 +306,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           {imagePath ? (
             <Image
               source={{ uri: imagePath }}
-              style={styles.productImage}
+              style={[styles.productImage, { aspectRatio: 1 }]}
               resizeMode="cover"
             />
           ) : (
@@ -314,14 +332,43 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
 
-        {/* Botón "Ver opciones" siempre visible para productos padre */}
-        <TouchableOpacity
-          style={styles.viewOptionsButton}
-          onPress={handleViewOptions}
-        >
-          <Ionicons name="options" size={16} color="#2563eb" />
-          <Text style={styles.viewOptionsButtonText}>Ver opciones</Text>
-        </TouchableOpacity>
+        {/* Renderizado condicional según si tiene variantes o no */}
+        {hasVariants ? (
+          // Producto CON variantes → Botón "Ver opciones"
+          <TouchableOpacity
+            style={styles.viewOptionsButton}
+            onPress={handleViewOptions}
+          >
+            <Ionicons name="options" size={16} color="#2563eb" />
+            <Text style={styles.viewOptionsButtonText}>Ver opciones</Text>
+          </TouchableOpacity>
+        ) : (
+          // Producto SIN variantes → Controles de cantidad + Botón agregar
+          <View style={styles.productActions}>
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={decrementQuantity}
+              >
+                <Ionicons name="remove" size={16} color="#64748b" />
+              </TouchableOpacity>
+              <Text style={styles.quantityText}>{quantity}</Text>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={incrementQuantity}
+              >
+                <Ionicons name="add" size={16} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.addToCartButton, (adding || quantity === 0) && styles.addToCartButtonDisabled]}
+              onPress={handleAddToCart}
+              disabled={adding || quantity === 0}
+            >
+              <Ionicons name="cart" size={16} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   } catch (error) {
@@ -997,6 +1044,16 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 6,
   },
+  productCategory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  productCategoryText: {
+    fontSize: 11,
+    color: '#64748b',
+  },
   categoryBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#dbeafe',
@@ -1023,23 +1080,6 @@ const styles = StyleSheet.create({
   productStock: {
     fontSize: 11,
     color: '#6b7280',
-  },
-  quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
   },
   quantityText: {
     fontSize: 16,
@@ -1128,6 +1168,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  productActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  quantityContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  quantityButton: {
+    padding: 4,
+  },
+  quantityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+  addToCartButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addToCartButtonDisabled: {
+    backgroundColor: '#94a3b8',
   },
   variantsModalOverlay: {
     flex: 1,
