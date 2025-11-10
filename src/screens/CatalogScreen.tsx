@@ -339,8 +339,8 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           {imagePath ? (
             <Image
               source={{ uri: imagePath }}
-              style={[styles.productImage, { aspectRatio: 1 }]}
-              resizeMode="cover"
+              style={styles.productImage}
+              resizeMode="contain"
             />
           ) : (
             <View style={styles.productImagePlaceholder}>
@@ -533,6 +533,22 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
       );
       console.log(`✅ ${result.length} productos cargados exitosamente`);
       
+      // 🔍 DEBUG: Verificar productos SPRAY
+      const sprayProducts = await db.getAllAsync<Product>(
+        `SELECT sku, name, parentSku, isActive, hideInCatalog, basePrice, priceCity, priceInterior, priceSpecial 
+         FROM products 
+         WHERE name LIKE '%SPRAY%' OR sku LIKE '%SPRAY%'`
+      );
+      if (sprayProducts.length > 0) {
+        console.log(`\n🔍 DEBUG: Productos SPRAY en BD (${sprayProducts.length}):`);
+        sprayProducts.forEach(p => {
+          console.log(`  - ${p.name} (${p.sku})`);
+          console.log(`    parentSku: ${p.parentSku || 'NULL'}`);
+          console.log(`    isActive: ${p.isActive}, hideInCatalog: ${p.hideInCatalog}`);
+          console.log(`    Precios: base=${p.basePrice}, city=${p.priceCity}, interior=${p.priceInterior}, special=${p.priceSpecial}`);
+        });
+      }
+      
       // Validar que los productos tengan los campos requeridos
       // Debe tener al menos un precio válido (basePrice o alguno de los diferenciados)
       const validProducts = result.filter(p => {
@@ -542,11 +558,18 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         if (!hasBasicFields || !hasPrice) {
           console.warn('⚠️ Producto inválido filtrado:', {
             sku: p.sku,
+            name: p.name,
             hasBasicFields,
             hasPrice,
             basePrice: p.basePrice,
-            priceCity: p.priceCity
+            priceCity: p.priceCity,
+            priceInterior: p.priceInterior,
+            priceSpecial: p.priceSpecial
           });
+          // 🔍 DEBUG: Alertar si es un producto SPRAY
+          if (p.name?.includes('SPRAY') || p.sku?.includes('SPRAY')) {
+            console.error('❌ SPRAY FILTRADO - Razón:', !hasBasicFields ? 'Campos básicos faltantes' : 'Sin precios válidos');
+          }
           return false;
         }
         
