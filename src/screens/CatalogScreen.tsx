@@ -1242,7 +1242,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   quantityContainer: {
-    flex: 1,
+    flex: 0.72,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1262,6 +1262,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addToCartButton: {
+    flex: 0.28,
     backgroundColor: '#2563eb',
     borderRadius: 6,
     paddingHorizontal: 12,
