@@ -11,6 +11,7 @@ import {
   TextInput,
   Image,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { Product } from '../types';
@@ -19,6 +20,24 @@ import { getCachedImagePath } from '../services/imageCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { addToCart } from '../services/cart';
+
+// Función para calcular número de columnas según tamaño de pantalla
+const getNumColumns = () => {
+  const screenWidth = Dimensions.get('window').width;
+  
+  // Teléfonos pequeños (< 360px): 2 columnas
+  if (screenWidth < 360) return 2;
+  
+  // Teléfonos normales (360-600px): 2 columnas
+  if (screenWidth < 600) return 2;
+  
+  // Tablets pequeñas (600-900px): 3 columnas
+  if (screenWidth < 900) return 3;
+  
+  // Tablets grandes (>= 900px): 4 columnas
+  return 4;
+};
+
 import { Modal } from 'react-native';
 import { getProductPrice, formatPrice, type PriceType } from '../utils/priceUtils';
 
@@ -398,12 +417,22 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [numColumns, setNumColumns] = useState(getNumColumns());
   const [refreshing, setRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
+
+  // Actualizar número de columnas si cambia el tamaño de pantalla
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', () => {
+      setNumColumns(getNumColumns());
+    });
+    
+    return () => subscription?.remove();
+  }, []);
 
   useEffect(() => {
     loadProducts();
@@ -735,7 +764,8 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         data={filteredProducts}
         renderItem={renderProduct}
         keyExtractor={(item) => item.id}
-        numColumns={2}
+        numColumns={numColumns}
+        key={numColumns}
         columnWrapperStyle={styles.productRow}
         contentContainerStyle={styles.productList}
         refreshControl={
