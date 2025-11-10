@@ -823,9 +823,10 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         key={numColumns}
         columnWrapperStyle={styles.productRow}
         contentContainerStyle={styles.productList}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
-        }
+        // refreshControl desactivado - usar botón de sincronización en panel
+        // refreshControl={
+        //   <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
+        // }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>📦</Text>
