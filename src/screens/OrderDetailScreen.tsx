@@ -44,23 +44,29 @@ export default function OrderDetailScreen() {
 
   const loadOrderDetail = async () => {
     try {
+      console.log('📋 OrderDetailScreen - Cargando pedido:', orderId, 'isPending:', isPending);
       const db = getDatabase();
 
       // Obtener información del pedido
       let order;
       if (isPending) {
+        console.log('🔍 Buscando en pending_orders...');
         order = await db.getFirstAsync<any>(
           'SELECT * FROM pending_orders WHERE id = ?',
           [orderId]
         );
       } else {
+        console.log('🔍 Buscando en order_history...');
         order = await db.getFirstAsync<any>(
           'SELECT * FROM order_history WHERE id = ?',
           [orderId]
         );
       }
 
+      console.log('📦 Pedido encontrado:', order ? 'SÍ' : 'NO');
+      
       if (!order) {
+        console.error('❌ Pedido no encontrado en la BD');
         Alert.alert('Error', 'Pedido no encontrado');
         navigation.goBack();
         return;
@@ -69,6 +75,7 @@ export default function OrderDetailScreen() {
       // Obtener items del pedido con JOIN a productos para obtener nombres
       let itemsRaw: any[] = [];
       if (isPending) {
+        console.log('🔍 Buscando items en pending_order_items...');
         itemsRaw = await db.getAllAsync<any>(
           `SELECT poi.*, p.name as productName, p.sku as productSku 
            FROM pending_order_items poi 
@@ -77,6 +84,7 @@ export default function OrderDetailScreen() {
           [orderId]
         );
       } else {
+        console.log('🔍 Buscando items en order_history_items...');
         itemsRaw = await db.getAllAsync<any>(
           `SELECT ohi.*, p.name as productName, p.sku as productSku 
            FROM order_history_items ohi 
@@ -86,6 +94,9 @@ export default function OrderDetailScreen() {
         );
       }
 
+      console.log('📦 Items encontrados:', itemsRaw.length);
+      console.log('📝 Items raw:', JSON.stringify(itemsRaw, null, 2));
+
       // Mapear items al formato esperado
       const items: OrderItem[] = itemsRaw.map(item => ({
         productName: item.productName || 'Producto',
@@ -94,6 +105,8 @@ export default function OrderDetailScreen() {
         price: parseFloat(item.pricePerUnit || item.price || '0'),
         subtotal: item.quantity * parseFloat(item.pricePerUnit || item.price || '0'),
       }));
+      
+      console.log('✅ Items mapeados:', items.length);
 
       // Calcular totales
       const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
