@@ -447,7 +447,18 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
               >
                 <Ionicons name="remove" size={16} color="#64748b" />
               </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
+              <TextInput
+                style={styles.quantityInput}
+                value={quantity > 0 ? quantity.toString() : ''}
+                onChangeText={(text) => {
+                  const numValue = parseInt(text) || 0;
+                  const maxStock = item.stock || 999;
+                  const validValue = Math.max(0, Math.min(numValue, maxStock));
+                  setQuantity(validValue);
+                }}
+                keyboardType="numeric"
+                placeholder="0"
+              />
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={incrementQuantity}
@@ -1395,6 +1406,19 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     minWidth: 30,
     textAlign: 'center',
+  },
+  quantityInput: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    minWidth: 50,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#ffffff',
   },
   addToCartButton: {
     flex: 0.28,
