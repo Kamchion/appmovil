@@ -171,15 +171,31 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   const checkHasVariants = async () => {
     try {
       const db = getDatabase();
+      console.log(`🔍 Verificando variantes para producto: ${item.name} (SKU: ${item.sku})`);
+      
       const result = await db.getAllAsync<{count: number}>(
         'SELECT COUNT(*) as count FROM products WHERE parentSku = ? AND isActive = 1',
         [item.sku]
       );
       
       const count = result[0]?.count || 0;
+      console.log(`   📊 Variantes encontradas: ${count}`);
+      
+      // Si hay variantes, también mostrar detalles
+      if (count > 0) {
+        const variantDetails = await db.getAllAsync<Product>(
+          'SELECT sku, name, hideInCatalog FROM products WHERE parentSku = ? AND isActive = 1',
+          [item.sku]
+        );
+        console.log(`   📋 Detalles de variantes:`);
+        variantDetails.forEach(v => {
+          console.log(`      - ${v.name} (${v.sku}) - hideInCatalog: ${v.hideInCatalog}`);
+        });
+      }
+      
       setHasVariants(count > 0);
     } catch (error) {
-      console.error('Error al verificar variantes:', error);
+      console.error('❌ Error al verificar variantes:', error);
       setHasVariants(false);
     }
   };
@@ -193,18 +209,25 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     
     try {
       const db = getDatabase();
+      console.log(`📦 Cargando variantes para: ${item.name} (${item.sku})`);
+      
+      // ✅ SOLO cargar variantes VISIBLES (hideInCatalog = 0)
       const result = await db.getAllAsync<Product>(
-        'SELECT * FROM products WHERE parentSku = ? AND isActive = 1 ORDER BY displayOrder ASC, name ASC',
+        'SELECT * FROM products WHERE parentSku = ? AND isActive = 1 AND hideInCatalog = 0 ORDER BY displayOrder ASC, name ASC',
         [item.sku]
       );
+      
+      console.log(`   📊 Variantes visibles cargadas: ${result.length}`);
+      
       if (result.length > 0) {
         setVariants(result);
         setHasVariants(true);
       } else {
+        console.warn(`   ⚠️ No se encontraron variantes visibles para ${item.sku}`);
         setHasVariants(false);
       }
     } catch (error) {
-      console.error('Error al cargar variantes:', error);
+      console.error('❌ Error al cargar variantes:', error);
       setHasVariants(false);
     }
   };
@@ -545,8 +568,10 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
           // Es un producto padre - mostrar si al menos una variante es visible
           const hasVisibleVariant = variants.some(v => v.hideInCatalog === 0);
           if (hasVisibleVariant) {
-            result.push(product);
-            console.log(`✅ Producto padre con variantes visibles: ${product.name} (${product.sku})`);
+            // ✅ FORZAR hideInCatalog=0 en el producto padre
+            const parentProduct = { ...product, hideInCatalog: 0 };
+            result.push(parentProduct);
+            console.log(`✅ Producto padre con variantes visibles: ${product.name} (${product.sku}) - hideInCatalog forzado a 0`);
           } else {
             console.log(`⏭️ Producto padre sin variantes visibles: ${product.name} (${product.sku})`);
           }
