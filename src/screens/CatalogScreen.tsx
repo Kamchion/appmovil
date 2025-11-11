@@ -678,18 +678,26 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             text: 'Salir y Borrar',
             style: 'destructive',
             onPress: async () => {
-              // Borrar el carrito
-              const db = getDatabase();
-              await db.runAsync('DELETE FROM cart');
-              // Regresar al panel principal
-              navigation.navigate('Home');
+              try {
+                console.log('🗑️ Borrando carrito...');
+                // Borrar el carrito de AsyncStorage
+                const { clearCart } = require('../services/cart');
+                await clearCart();
+                console.log('✅ Carrito borrado exitosamente');
+                // Regresar al panel principal
+                navigation.navigate('DashboardHome' as never);
+              } catch (error) {
+                console.error('❌ Error al borrar carrito:', error);
+                // Intentar navegar de todos modos
+                navigation.navigate('DashboardHome' as never);
+              }
             },
           },
         ]
       );
     } else {
       // Si no hay productos, salir directamente
-      navigation.navigate('Home');
+      navigation.navigate('DashboardHome' as never);
     }
   };
 
