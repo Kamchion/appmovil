@@ -415,13 +415,72 @@ export async function syncPendingOrders(
 
     onProgress?.('Actualizando estado local...');
 
-    // Marcar pedidos como sincronizados
+    // Importar la función para generar números B
+    const { generateSentOrderNumber } = await import('../utils/orderNumber');
+
+    // Mover pedidos sincronizados a order_history
     for (const result of response.results) {
       if (result.success) {
-        await db.runAsync(
-          'UPDATE pending_orders SET synced = 1 WHERE createdAt = ?',
+        // Obtener el pedido original
+        const order = await db.getFirstAsync<PendingOrder>(
+          'SELECT * FROM pending_orders WHERE createdAt = ?',
           [result.createdAtOffline]
         );
+        
+        if (order) {
+          // Generar nuevo número B para el pedido enviado
+          const sentOrderNumber = await generateSentOrderNumber();
+          
+          // Obtener los items del pedido
+          const items = await db.getAllAsync<PendingOrderItem>(
+            'SELECT * FROM pending_order_items WHERE orderId = ?',
+            [order.id]
+          );
+          
+          // Insertar en order_history con número B y status "enviado"
+          await db.runAsync(
+            `INSERT INTO order_history (
+              id, orderNumber, clientId, customerName, clientName, customerNote, notes,
+              total, tax, status, synced, createdAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              order.id,
+              sentOrderNumber, // Nuevo número B
+              order.clientId,
+              order.customerName,
+              order.clientName,
+              order.customerNote,
+              order.notes,
+              order.total,
+              order.tax,
+              'enviado', // Status cambiado a "enviado"
+              1, // synced = 1
+              order.createdAt,
+            ]
+          );
+          
+          // Insertar items en order_history_items
+          for (const item of items) {
+            await db.runAsync(
+              `INSERT INTO order_history_items (
+                id, orderId, productId, sku, quantity, pricePerUnit, price
+              ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                item.id,
+                item.orderId,
+                item.productId,
+                item.sku,
+                item.quantity,
+                item.pricePerUnit,
+                item.price,
+              ]
+            );
+          }
+          
+          // Eliminar de pending_orders y pending_order_items
+          await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
+          await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+        }
       }
     }
 

@@ -365,7 +365,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
             ]}
           >
             <Text style={styles.statusText}>
-              {item.synced ? '✓ Sincronizado' : '⏳ Pendiente'}
+              {item.synced ? '✓ Enviado' : '⏳ Pendiente por enviar'}
             </Text>
           </View>
         </View>

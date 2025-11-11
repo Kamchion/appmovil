@@ -234,11 +234,11 @@ export default function OrderDetailScreen() {
           styles.statusBadge,
           orderDetail.status === 'draft' && styles.statusDraft,
           orderDetail.status === 'pending' && styles.statusPending,
-          orderDetail.status === 'completed' && styles.statusCompleted,
+          orderDetail.status === 'enviado' && styles.statusCompleted,
         ]}>
           <Text style={styles.statusText}>
             {orderDetail.status === 'draft' ? 'Borrador' :
-             orderDetail.status === 'pending' ? 'Pendiente' : 'Enviado'}
+             orderDetail.status === 'pending' ? 'Pendiente por enviar' : 'Enviado'}
           </Text>
         </View>
       </View>
