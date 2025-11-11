@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quantityInput: {
-    width: 40,
+    width: 50,
     height: 32,
     textAlign: 'center',
     fontSize: 14,
