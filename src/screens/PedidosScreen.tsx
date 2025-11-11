@@ -159,24 +159,26 @@ export default function PedidosScreen({ navigation }: any) {
 
     try {
       const db = getDatabase();
-      const agentNumber = await AsyncStorage.getItem('agentNumber');
-
+      const newId = Date.now().toString();
+      
       await db.runAsync(
-        `INSERT INTO clients (
-          clientNumber, companyName, contactPerson, email, phone, address,
-          companyTaxId, gpsLocation, priceType, agentNumber, isActive, createdAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`,
+        `INSERT INTO clients 
+         (id, name, companyName, email, phone, address, city, state, clientNumber, priceType, isActive, syncedAt, needsSync)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          newClientData.clientNumber,
-          newClientData.companyName,
+          newId,
           newClientData.contactPerson,
+          newClientData.companyName,
           newClientData.email || '',
           newClientData.phone,
           newClientData.address || '',
-          newClientData.companyTaxId || '',
-          newClientData.gpsLocation || '',
+          '',
+          '',
+          newClientData.clientNumber,
           newClientData.priceType,
-          agentNumber || '',
+          1,
+          new Date().toISOString(),
+          1,
         ]
       );
 
