@@ -129,12 +129,9 @@ export default function OrderDetailScreen() {
 
   const handleContinueOrder = () => {
     // Navegar a la pantalla de edición del pedido (PedidosScreen con el orderId)
-    Alert.alert(
-      'Continuar con el pedido',
-      'Esta funcionalidad aún no está implementada. Se abrirá la pantalla de edición del pedido.',
-      [{ text: 'OK' }]
-    );
-    // TODO: navigation.navigate('Pedidos', { orderId: orderDetail?.orderId });
+    if (orderDetail) {
+      navigation.navigate('Pedidos', { orderId: orderDetail.orderId });
+    }
   };
 
   const handleSendOrder = async () => {
@@ -150,8 +147,8 @@ export default function OrderDetailScreen() {
           text: 'Enviar',
           onPress: async () => {
             try {
-              const { syncPendingOrders } = await import('../services/sync');
-              const result = await syncPendingOrders(() => {});
+              const { syncSingleOrder } = await import('../services/sync');
+              const result = await syncSingleOrder(orderId, () => {});
               if (result.success) {
                 Alert.alert('Éxito', 'Pedido enviado correctamente');
                 navigation.goBack();

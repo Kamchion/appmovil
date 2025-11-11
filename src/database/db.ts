@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DB_NAME = 'vendedor_offline.db';
-const DB_VERSION = 3; // Incrementar cuando hay cambios en el esquema
+const DB_VERSION = 4; // Incrementar cuando hay cambios en el esquema
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -503,6 +503,51 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
 
         console.log('✅ Migración v3 completada');
       }
+
+      // Migración v4: Agregar columnas synced y clientName a order_history
+      if (currentVersion < 4) {
+        console.log('🔄 Aplicando migración v4: Agregando columnas synced y clientName...');
+        
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history ADD COLUMN synced INTEGER DEFAULT 1;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history ADD COLUMN clientName TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history_items ADD COLUMN sku TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history_items ADD COLUMN price TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        console.log('✅ Migración v4 completada');
+      }
+
+      // Actualizar versión en config
+      await database.execAsync(
+        'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
+        ['db_version', DB_VERSION.toString()]
+      );
     }
   } catch (error) {
     console.warn('⚠️ Error en migración (puede ser normal):', error);

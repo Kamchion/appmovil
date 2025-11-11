@@ -500,6 +500,133 @@ export async function syncPendingOrders(
 }
 
 /**
+ * Sincroniza un solo pedido específico
+ */
+export async function syncSingleOrder(
+  orderId: string,
+  onProgress?: (message: string) => void
+): Promise<{ success: boolean; message: string }> {
+  try {
+    onProgress?.('Verificando conexión...');
+    const isOnline = await checkConnection();
+    
+    if (!isOnline) {
+      return {
+        success: false,
+        message: 'Sin conexión a internet',
+      };
+    }
+
+    onProgress?.('Obteniendo pedido...');
+    const db = getDatabase();
+    
+    // Obtener el pedido específico
+    const order = await db.getFirstAsync<PendingOrder>(
+      "SELECT * FROM pending_orders WHERE id = ? AND status = 'pending'",
+      [orderId]
+    );
+
+    if (!order) {
+      return {
+        success: false,
+        message: 'Pedido no encontrado o ya fue enviado',
+      };
+    }
+
+    onProgress?.('Preparando pedido...');
+
+    // Obtener items del pedido
+    const items = await db.getAllAsync<PendingOrderItem>(
+      'SELECT * FROM pending_order_items WHERE orderId = ?',
+      [order.id]
+    );
+
+    // Preparar datos para enviar
+    const orderToUpload = {
+      clientId: order.clientId,
+      customerNote: order.customerNote,
+      items: items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        pricePerUnit: item.pricePerUnit,
+      })),
+      createdAtOffline: order.createdAt,
+    };
+
+    // Subir pedido al servidor
+    onProgress?.('Enviando pedido...');
+    const response = await uploadPendingOrders([orderToUpload]);
+
+    if (!response.success || response.results[0]?.success !== true) {
+      throw new Error('Error al subir el pedido');
+    }
+
+    onProgress?.('Actualizando estado local...');
+
+    // Importar la función para generar números B
+    const { generateSentOrderNumber } = await import('../utils/orderNumber');
+
+    // Generar nuevo número B para el pedido enviado
+    const sentOrderNumber = await generateSentOrderNumber();
+    
+    // Insertar en order_history con número B y status "enviado"
+    await db.runAsync(
+      `INSERT INTO order_history (
+        id, orderNumber, clientId, customerName, clientName, customerNote, notes,
+        total, tax, status, synced, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        order.id,
+        sentOrderNumber,
+        order.clientId,
+        order.customerName,
+        order.clientName,
+        order.customerNote,
+        order.notes,
+        order.total,
+        order.tax,
+        'enviado',
+        1,
+        order.createdAt,
+      ]
+    );
+    
+    // Insertar items en order_history_items
+    for (const item of items) {
+      await db.runAsync(
+        `INSERT INTO order_history_items (
+          id, orderId, productId, sku, quantity, pricePerUnit, price
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.id,
+          item.orderId,
+          item.productId,
+          item.sku,
+          item.quantity,
+          item.pricePerUnit,
+          item.price,
+        ]
+      );
+    }
+    
+    // Eliminar de pending_orders y pending_order_items
+    await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
+    await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+
+    return {
+      success: true,
+      message: 'Pedido enviado correctamente',
+    };
+  } catch (error: any) {
+    console.error('Error en syncSingleOrder:', error);
+    return {
+      success: false,
+      message: error.message || 'Error desconocido',
+    };
+  }
+}
+
+/**
  * Sincronización completa (catálogo + pedidos)
  */
 export async function fullSync(
