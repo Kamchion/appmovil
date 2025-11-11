@@ -207,17 +207,130 @@ export default function OrderDetailScreen() {
         {
           text: 'Enviar',
           onPress: async () => {
+            setLoading(true);
             try {
-              const { syncSingleOrder } = await import('../services/sync');
-              const result = await syncSingleOrder(orderId, () => {});
-              if (result.success) {
-                Alert.alert('Éxito', 'Pedido enviado correctamente');
+              const { createOrderOnline } = require('../services/api');
+              const { getDatabase } = require('../database/db');
+              const { generateSentOrderNumber } = require('../utils/orderNumber');
+              const db = getDatabase();
+
+              // 1. Cargar el pedido completo de pending_orders
+              const order = await db.getFirstAsync<any>(
+                'SELECT * FROM pending_orders WHERE id = ?',
+                [orderId]
+              );
+
+              if (!order) {
+                Alert.alert('Error', 'Pedido no encontrado');
+                setLoading(false);
+                return;
+              }
+
+              // 2. Cargar los items del pedido
+              const items = await db.getAllAsync<any>(
+                'SELECT * FROM pending_order_items WHERE orderId = ?',
+                [orderId]
+              );
+
+              // 3. Cargar los productos completos para enviar
+              const cart = [];
+              for (const item of items) {
+                const product = await db.getFirstAsync<any>(
+                  'SELECT * FROM products WHERE id = ?',
+                  [item.productId]
+                );
+                if (product) {
+                  cart.push({
+                    product: {
+                      id: product.id,
+                      name: product.name,
+                      sku: product.sku,
+                      price: item.pricePerUnit
+                    },
+                    quantity: item.quantity,
+                  });
+                }
+              }
+
+              try {
+                // 4. Intentar enviar al servidor
+                console.log('🌐 Intentando enviar pedido al backend...');
+                const result = await createOrderOnline({
+                  cart: cart,
+                  customerNote: order.customerNote || '',
+                  selectedClientId: order.clientId.toString(),
+                });
+
+                // 5. Si tiene éxito, mover a order_history con número B
+                const sentOrderNumber = await generateSentOrderNumber();
+                const now = new Date().toISOString();
+
+                console.log('💾 Guardando pedido en historial local...');
+                await db.runAsync(
+                  `INSERT INTO order_history (
+                    id, orderNumber, clientId, customerName, clientName, customerNote,
+                    subtotal, tax, total, status, synced, createdAt
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    order.id,
+                    sentOrderNumber,
+                    order.clientId,
+                    order.customerName,
+                    order.clientName,
+                    order.customerNote,
+                    order.subtotal,
+                    order.tax,
+                    order.total,
+                    'enviado',
+                    1,
+                    now
+                  ]
+                );
+
+                // 6. Guardar items en order_history_items
+                for (const item of items) {
+                  await db.runAsync(
+                    `INSERT INTO order_history_items (
+                      id, orderId, productId, sku, quantity, pricePerUnit, price
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                      item.id,
+                      item.orderId,
+                      item.productId,
+                      item.sku,
+                      item.quantity,
+                      item.pricePerUnit,
+                      item.price,
+                    ]
+                  );
+                }
+
+                // 7. Eliminar de pending_orders
+                await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [orderId]);
+                await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [orderId]);
+
+                Alert.alert('✅ Éxito', 'Pedido enviado y guardado correctamente');
                 navigation.goBack();
-              } else {
-                Alert.alert('Error', result.message);
+
+              } catch (apiError: any) {
+                // 8. Si falla, actualizar status a 'pending' para sincronizar después
+                console.log('⚠️ Error al enviar, marcando como pendiente...');
+                await db.runAsync(
+                  "UPDATE pending_orders SET status = 'pending' WHERE id = ?",
+                  [orderId]
+                );
+
+                Alert.alert(
+                  '⚠️ Sin conexión',
+                  'El pedido se guardará como pendiente y se enviará automáticamente cuando haya conexión.'
+                );
+                navigation.goBack();
               }
             } catch (error: any) {
-              Alert.alert('Error', error.message || 'Error al enviar el pedido');
+              console.error('❌ Error:', error);
+              Alert.alert('Error', 'No se pudo enviar el pedido: ' + error.message);
+            } finally {
+              setLoading(false);
             }
           },
         },
