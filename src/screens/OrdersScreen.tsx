@@ -85,13 +85,27 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         // Obtener items del pedido para mostrar detalles
         const db = getDatabase();
         console.log('💾 Obteniendo items del pedido...');
-        const items = await db.getAllAsync<any>(
-        `SELECT poi.*, p.name as productName, p.sku 
-         FROM pending_order_items poi 
-         LEFT JOIN products p ON poi.productId = p.id 
-         WHERE poi.orderId = ?`,
-        [item.id]
-      );
+        
+        // Intentar buscar en pending_order_items primero (borradores y pendientes)
+        let items = await db.getAllAsync<any>(
+          `SELECT poi.*, p.name as productName, p.sku 
+           FROM pending_order_items poi 
+           LEFT JOIN products p ON poi.productId = p.id 
+           WHERE poi.orderId = ?`,
+          [item.id]
+        );
+        
+        // Si no se encuentran items, buscar en order_history_items (pedidos enviados)
+        if (items.length === 0) {
+          console.log('🔍 No encontrado en pending_order_items, buscando en order_history_items...');
+          items = await db.getAllAsync<any>(
+            `SELECT ohi.*, p.name as productName, p.sku 
+             FROM order_history_items ohi 
+             LEFT JOIN products p ON ohi.productId = p.id 
+             WHERE ohi.orderId = ?`,
+            [item.id]
+          );
+        }
       
       console.log('📝 Items encontrados:', items.length);
       

@@ -316,6 +316,17 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 
                 console.log('✅ Pedido guardado en historial local');
 
+                // ✅ Guardar items del pedido en order_history_items
+                console.log('📝 Guardando items del pedido...');
+                for (const item of cart) {
+                  const itemId = `${orderId}-${item.product.id}`;
+                  await db.runAsync(
+                    `INSERT INTO order_history_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                  );
+                }
+                console.log('✅ Items guardados en historial');
+
                 await clearCart();
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
