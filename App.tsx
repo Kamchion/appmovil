@@ -172,6 +172,10 @@ export default function App() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Importar AsyncStorage
+              const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              
+              // 1. Borrar todos los datos de la base de datos
               const { getDatabase } = await import('./src/database/db');
               const db = getDatabase();
               await db.execAsync('DELETE FROM pending_orders');
@@ -180,7 +184,18 @@ export default function App() {
               await db.execAsync('DELETE FROM order_history_items');
               await db.execAsync('DELETE FROM products');
               await db.execAsync('DELETE FROM clients');
-              Alert.alert('Éxito', 'Todos los datos han sido eliminados');
+              
+              // 2. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
+              await AsyncStorage.removeItem('last_sync_timestamp');
+              
+              // 3. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
+              await AsyncStorage.removeItem('@cart');
+              await AsyncStorage.removeItem('selectedClientId');
+              await AsyncStorage.removeItem('selectedClientData');
+              await AsyncStorage.removeItem('editingOrderId');
+              
+              console.log('✅ Todos los datos han sido eliminados, incluyendo timestamps de sincronización');
+              Alert.alert('Éxito', 'Todos los datos han sido eliminados. La app está como recién instalada.');
             } catch (error) {
               console.error('Error al borrar datos:', error);
               Alert.alert('Error', 'No se pudieron borrar los datos');
