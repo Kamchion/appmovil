@@ -803,12 +803,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             style={styles.topBarCartButton}
             onPress={() => navigation.navigate('Cart')}
           >
-            <Ionicons name="cart" size={24} color="#ffffff" />
-            {cartCount.lines > 0 && (
-              <View style={styles.topBarCartBadge}>
-                <Text style={styles.topBarCartBadgeText}>{cartCount.lines}</Text>
-              </View>
-            )}
+            <Ionicons name="cart" size={32} color="#FFC107" />
           </TouchableOpacity>
         </View>
       </View>
