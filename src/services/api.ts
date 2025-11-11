@@ -274,6 +274,26 @@ export async function getChanges(
 }
 
 /**
+ * Obtiene cambios incrementales en clientes
+ */
+export async function getClientChanges(
+  lastSyncTimestamp: string
+): Promise<{
+  success: boolean;
+  timestamp: string;
+  clients: any[];
+}> {
+  return await trpcQuery<{
+    success: boolean;
+    timestamp: string;
+    clients: any[];
+  }>(
+    'sync.getClientChanges',
+    { lastSyncTimestamp }
+  );
+}
+
+/**
  * Verifica el estado de sincronización
  */
 export async function getSyncStatus(): Promise<{

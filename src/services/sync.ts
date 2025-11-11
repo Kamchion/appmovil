@@ -481,6 +481,200 @@ export async function fullSync(
 }
 
 /**
+ * Sincronización incremental inteligente
+ * Solo sube y descarga cambios desde la última sincronización
+ */
+export async function incrementalSync(
+  onProgress?: (message: string) => void
+): Promise<{
+  success: boolean;
+  message: string;
+  productsUpdated: number;
+  ordersSynced: number;
+  clientsUpdated: number;
+}> {
+  try {
+    const db = getDatabase();
+    const lastSync = await getLastSyncTimestamp();
+    
+    if (!lastSync) {
+      // Si no hay sincronización previa, hacer fullSync
+      onProgress?.('Primera sincronización, descargando todo...');
+      const result = await fullSync(onProgress);
+      return {
+        ...result,
+        clientsUpdated: 0,
+      };
+    }
+
+    // ========== SUBIR CAMBIOS ==========
+    
+    // 1. Subir pedidos pendientes
+    onProgress?.('Enviando pedidos pendientes...');
+    const ordersResult = await syncPendingOrders(onProgress);
+    
+    // 2. Subir clientes modificados
+    onProgress?.('Enviando clientes modificados...');
+    const modifiedClients = await db.getAllAsync<any>(
+      'SELECT * FROM clients WHERE needsSync = 1'
+    );
+    
+    for (const client of modifiedClients) {
+      try {
+        await updateClientOnServer(client.id, {
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address,
+          companyName: client.companyName,
+          companyTaxId: client.companyTaxId,
+        });
+        
+        // Marcar como sincronizado
+        await db.runAsync(
+          'UPDATE clients SET needsSync = 0 WHERE id = ?',
+          [client.id]
+        );
+      } catch (error) {
+        console.error('Error al sincronizar cliente:', client.id, error);
+      }
+    }
+
+    // ========== DESCARGAR CAMBIOS ==========
+    
+    // 3. Descargar cambios en productos
+    onProgress?.('Descargando cambios en catálogo...');
+    const productChanges = await getChanges(lastSync);
+    
+    let productsUpdated = 0;
+    let imagesDownloaded = 0;
+    
+    if (productChanges.success && productChanges.products) {
+      for (const product of productChanges.products) {
+        // Si el producto está inactivo, eliminarlo
+        if (!product.isActive) {
+          await db.runAsync('DELETE FROM products WHERE id = ?', [product.id]);
+          productsUpdated++;
+          continue;
+        }
+        
+        // Verificar si la imagen cambió
+        const existingProduct = await db.getAllAsync<any>(
+          'SELECT image, updatedAt FROM products WHERE id = ?',
+          [product.id]
+        );
+        
+        const imageChanged = existingProduct.length === 0 || 
+                            existingProduct[0].image !== product.image ||
+                            existingProduct[0].updatedAt !== product.updatedAt;
+        
+        // Actualizar producto
+        await db.runAsync(
+          `INSERT OR REPLACE INTO products 
+           (id, sku, name, description, category, image, basePrice, price, stock, 
+            isActive, minimumQuantity, hideInCatalog, parentSku, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            product.id,
+            product.sku,
+            product.name,
+            product.description,
+            product.category,
+            product.image,
+            product.basePrice,
+            product.price,
+            product.stock,
+            product.isActive ? 1 : 0,
+            product.minimumQuantity,
+            product.hideInCatalog ? 1 : 0,
+            product.parentSku || null,
+            product.updatedAt,
+          ]
+        );
+        
+        productsUpdated++;
+        
+        // Descargar imagen solo si cambió
+        if (imageChanged && product.image) {
+          try {
+            await cacheMultipleImages([product.image]);
+            imagesDownloaded++;
+          } catch (error) {
+            console.warn('Error al descargar imagen:', product.image);
+          }
+        }
+      }
+    }
+    
+    // 4. Descargar cambios en clientes
+    onProgress?.('Descargando cambios en clientes...');
+    const { getClientChanges } = require('./api');
+    const clientChanges = await getClientChanges(lastSync);
+    
+    let clientsUpdated = 0;
+    
+    if (clientChanges.success && clientChanges.clients) {
+      for (const client of clientChanges.clients) {
+        // Si el cliente fue removido (reasignado a otro vendedor)
+        if (client._removed) {
+          await db.runAsync('DELETE FROM clients WHERE id = ?', [client.id]);
+          clientsUpdated++;
+          continue;
+        }
+        
+        // Actualizar o insertar cliente
+        await db.runAsync(
+          `INSERT OR REPLACE INTO clients 
+           (id, name, email, phone, address, companyName, companyTaxId, 
+            priceType, isActive, createdAt, updatedAt, needsSync)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          [
+            client.id,
+            client.name,
+            client.email,
+            client.phone,
+            client.address,
+            client.companyName,
+            client.companyTaxId,
+            client.priceType || 'ciudad',
+            client.isActive ? 1 : 0,
+            client.createdAt,
+            client.updatedAt,
+          ]
+        );
+        
+        clientsUpdated++;
+      }
+    }
+    
+    // Actualizar timestamp de última sincronización
+    const now = new Date().toISOString();
+    await AsyncStorage.setItem(LAST_SYNC_KEY, now);
+    
+    const message = `${productsUpdated} productos, ${clientsUpdated} clientes, ${imagesDownloaded} imágenes actualizadas`;
+    
+    onProgress?.(message);
+    
+    return {
+      success: true,
+      message,
+      productsUpdated,
+      ordersSynced: ordersResult.ordersSynced,
+      clientsUpdated,
+    };
+  } catch (error: any) {
+    console.error('Error en incrementalSync:', error);
+    return {
+      success: false,
+      message: error.message || 'Error desconocido',
+      productsUpdated: 0,
+      ordersSynced: 0,
+      clientsUpdated: 0,
+    };
+  }
+}
+
+/**
  * Configura sincronización automática al detectar conexión
  */
 export function setupAutoSync(

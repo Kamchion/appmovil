@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { fullSync, checkConnection } from '../services/sync';
+import { fullSync, incrementalSync, checkConnection } from '../services/sync';
 
 /**
  * Pantalla principal del Dashboard de Vendedor
@@ -48,14 +48,14 @@ export default function DashboardHomeScreen() {
     setSyncMessage('Iniciando sincronización...');
 
     try {
-      const result = await fullSync((message) => {
+      const result = await incrementalSync((message) => {
         setSyncMessage(message);
       });
 
       if (result.success) {
         Alert.alert(
           '✅ Sincronización Exitosa',
-          `${result.productsUpdated} productos actualizados\n${result.ordersSynced} pedidos sincronizados`,
+          `${result.productsUpdated} productos\n${result.clientsUpdated} clientes\n${result.ordersSynced} pedidos`,
           [{ text: 'OK' }]
         );
       } else {
@@ -75,6 +75,60 @@ export default function DashboardHomeScreen() {
       setIsSyncing(false);
       setSyncMessage('');
     }
+  };
+
+  const handleFullSync = async () => {
+    if (!isOnline) {
+      Alert.alert(
+        'Sin conexión',
+        'No hay conexión a internet.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Sincronizar Todo',
+      'Esto descargará TODO el catálogo e imágenes nuevamente. Puede tardar varios minutos. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Continuar',
+          onPress: async () => {
+            setIsSyncing(true);
+            setSyncMessage('Descargando todo el catálogo...');
+
+            try {
+              const result = await fullSync((message) => {
+                setSyncMessage(message);
+              });
+
+              if (result.success) {
+                Alert.alert(
+                  '✅ Sincronización Completa',
+                  `${result.productsUpdated} productos actualizados\n${result.ordersSynced} pedidos sincronizados`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                Alert.alert(
+                  '⚠️ Error',
+                  result.message,
+                  [{ text: 'OK' }]
+                );
+              }
+            } catch (error: any) {
+              Alert.alert(
+                '❌ Error',
+                error.message || 'Error desconocido',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setIsSyncing(false);
+              setSyncMessage('');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const menuItems = [
@@ -113,6 +167,15 @@ export default function DashboardHomeScreen() {
       color: '#f97316', // orange
       bgColor: '#ffedd5',
       screen: 'Historial',
+    },
+    {
+      id: 'fullsync',
+      title: 'Sincronizar Todo',
+      icon: '🔄',
+      description: 'Descargar todo el catálogo nuevamente',
+      color: '#6b7280', // gray
+      bgColor: '#f3f4f6',
+      action: 'fullsync',
     },
   ];
 
@@ -172,7 +235,13 @@ export default function DashboardHomeScreen() {
             <TouchableOpacity
               key={item.id}
               style={[styles.card, { borderColor: item.color }]}
-              onPress={() => navigation.navigate(item.screen)}
+              onPress={() => {
+                if (item.action === 'fullsync') {
+                  handleFullSync();
+                } else {
+                  navigation.navigate(item.screen);
+                }
+              }}
               activeOpacity={0.7}
             >
               <View style={[styles.iconContainer, { backgroundColor: item.bgColor }]}>
