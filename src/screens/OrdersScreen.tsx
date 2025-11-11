@@ -81,9 +81,9 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
 
     const handleOrderPress = () => {
       // Navegar a la pantalla de detalles del pedido
+      // OrderDetailScreen buscará automáticamente en pending_orders y order_history
       navigation.navigate('OrderDetail', {
         orderId: item.id,
-        isPending: !item.synced,
       });
     };
 

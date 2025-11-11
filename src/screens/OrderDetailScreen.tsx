@@ -33,7 +33,7 @@ interface OrderDetail {
 export default function OrderDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { orderId, isPending } = route.params as { orderId: string; isPending: boolean };
+  const { orderId } = route.params as { orderId: string };
 
   const [loading, setLoading] = useState(true);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
