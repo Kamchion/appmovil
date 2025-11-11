@@ -18,6 +18,7 @@ import ProductDetailScreen from './src/screens/ProductDetailScreen';
 import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
+import OrderDetailScreen from './src/screens/OrderDetailScreen';
 
 // Services
 import { setupAutoSync } from './src/services/sync';
@@ -258,6 +259,13 @@ export default function App() {
                 name="Checkout"
                 component={CheckoutScreen}
                 options={{ title: 'Crear Pedido' }}
+              />
+
+              {/* Order Detail */}
+              <Stack.Screen
+                name="OrderDetail"
+                component={OrderDetailScreen}
+                options={{ title: 'Detalles del Pedido' }}
               />
             </>
           )}

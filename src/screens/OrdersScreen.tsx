@@ -79,7 +79,15 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
       minute: '2-digit',
     });
 
-    const handleOrderPress = async () => {
+    const handleOrderPress = () => {
+      // Navegar a la pantalla de detalles del pedido
+      navigation.navigate('OrderDetail', {
+        orderId: item.id,
+        isPending: !item.synced,
+      });
+    };
+
+    const handleOrderActions = async () => {
       try {
         console.log('👆 Click en pedido:', item.id);
         // Obtener items del pedido para mostrar detalles
@@ -115,7 +123,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
       
       const detailText = `Pedido #${item.id.slice(-8)}\nCliente: ${item.customerName}\nTotal: $${item.total}\n\nProductos:\n${itemsText}\n\n¿Qué deseas hacer?`;
       
-      // Si el pedido es un borrador (status='draft')
+      // Mostrar acciones solo para borradores y pendientes
       if (item.status === 'draft') {
         Alert.alert(
           'Pedido Borrador',
@@ -315,7 +323,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         );
       }
       } catch (error) {
-        console.error('❌ Error en handleOrderPress:', error);
+        console.error('❌ Error en handleOrderActions:', error);
         Alert.alert('Error', 'No se pudieron cargar los detalles del pedido: ' + error.message);
       }
     };
