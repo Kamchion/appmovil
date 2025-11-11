@@ -59,10 +59,18 @@ export default function DashboardStatsScreen() {
       const totalClients = clients.length;
       const activeClients = clients.filter((c) => c.isActive === 1).length;
 
-      // Get orders from pending_orders table
-      const orders = await db.getAllAsync<any>(
-        'SELECT * FROM pending_orders ORDER BY createdAt DESC'
+      // Get orders from pending_orders (only pending/completed, NOT drafts)
+      const pendingOrders = await db.getAllAsync<any>(
+        "SELECT * FROM pending_orders WHERE status != 'draft' ORDER BY createdAt DESC"
       );
+      
+      // Get orders from order_history (already synced orders)
+      const historyOrders = await db.getAllAsync<any>(
+        'SELECT * FROM order_history ORDER BY createdAt DESC'
+      );
+      
+      // ✅ Combine both sources for complete statistics
+      const orders = [...pendingOrders, ...historyOrders];
 
       // Calculate current month stats
       const now = new Date();
@@ -145,7 +153,7 @@ export default function DashboardStatsScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Text style={styles.headerTitle}>Estadísticas</Text>
           <Text style={styles.headerSubtitle}>
             Estadísticas y métricas de rendimiento
           </Text>

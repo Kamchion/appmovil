@@ -98,7 +98,7 @@ export default function DashboardHomeScreen() {
     },
     {
       id: 'dashboard',
-      title: 'Dashboard',
+      title: 'Estadísticas',
       icon: '📊',
       description: 'Ver estadísticas y métricas',
       color: '#8b5cf6', // purple
