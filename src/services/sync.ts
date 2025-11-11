@@ -513,30 +513,64 @@ export async function incrementalSync(
     onProgress?.('Enviando pedidos pendientes...');
     const ordersResult = await syncPendingOrders(onProgress);
     
-    // 2. Subir clientes modificados
-    onProgress?.('Enviando clientes modificados...');
+    // 2. Subir clientes pendientes (nuevos y modificados)
+    onProgress?.('Enviando clientes pendientes...');
     const modifiedClients = await db.getAllAsync<any>(
       'SELECT * FROM clients WHERE needsSync = 1'
     );
     
+    console.log(`📤 Encontrados ${modifiedClients.length} clientes pendientes de sincronización`);
+    
     for (const client of modifiedClients) {
       try {
-        await updateClientOnServer(client.id, {
-          name: client.name,
-          email: client.email,
-          phone: client.phone,
-          address: client.address,
-          companyName: client.companyName,
-          companyTaxId: client.companyTaxId,
-        });
+        const token = await getAuthToken();
+        if (!token) {
+          console.warn('⚠️ No hay token, omitiendo sincronización de clientes');
+          break;
+        }
+
+        // Detectar si es cliente nuevo (ID generado localmente) o existente
+        const isNewClient = client.id && client.id.toString().length < 20; // IDs locales son timestamps
+        
+        if (isNewClient) {
+          // Cliente creado offline - usar createClientOnServer
+          console.log(`✨ Creando cliente nuevo en servidor: ${client.companyName}`);
+          const { createClientOnServer } = require('./api-client-update');
+          
+          await createClientOnServer(token, {
+            clientNumber: client.clientNumber || `CLI-${Date.now().toString().slice(-6)}`,
+            companyName: client.companyName || 'Sin nombre',
+            contactPerson: client.name || client.contactPerson || 'Sin contacto',
+            email: client.email || '',
+            phone: client.phone || '',
+            address: client.address || '',
+            gpsLocation: client.gpsLocation || '',
+            companyTaxId: client.companyTaxId || '',
+            priceType: client.priceType || 'ciudad',
+          });
+        } else {
+          // Cliente existente modificado - usar updateClientOnServer
+          console.log(`🔄 Actualizando cliente existente: ${client.companyName}`);
+          await updateClientOnServer(client.id, {
+            name: client.name,
+            email: client.email,
+            phone: client.phone,
+            address: client.address,
+            companyName: client.companyName,
+            companyTaxId: client.companyTaxId,
+          });
+        }
         
         // Marcar como sincronizado
         await db.runAsync(
           'UPDATE clients SET needsSync = 0 WHERE id = ?',
           [client.id]
         );
-      } catch (error) {
-        console.error('Error al sincronizar cliente:', client.id, error);
+        
+        console.log(`✅ Cliente sincronizado: ${client.companyName}`);
+      } catch (error: any) {
+        console.error(`❌ Error al sincronizar cliente ${client.companyName}:`, error.message);
+        // Continuar con el siguiente cliente aunque falle uno
       }
     }
 
