@@ -162,7 +162,50 @@ export default function ClientesScreen() {
         ]
       );
 
-      Alert.alert('Éxito', 'Cliente creado exitosamente');
+      // Intentar sincronizar inmediatamente con el servidor
+      try {
+        const { createClientOnServer } = require('../services/api-client-update');
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const token = await AsyncStorage.getItem('vendor_token');
+        
+        if (!token) {
+          console.warn('⚠️ No hay token de vendedor, se sincronizará después');
+          Alert.alert('Éxito', 'Cliente creado localmente. Se sincronizará automáticamente.');
+        } else {
+          console.log('🔄 Sincronizando nuevo cliente con servidor...');
+          
+          const result = await createClientOnServer(token, {
+            clientNumber: formData.clientNumber,
+            companyName: formData.companyName,
+            contactPerson: formData.contactPerson,
+            email: formData.email || '',
+            phone: formData.phone,
+            address: formData.address || '',
+            companyTaxId: formData.companyTaxId || '',
+            gpsLocation: formData.gpsLocation || '',
+            priceType: formData.priceType,
+          });
+          
+          console.log('📡 Respuesta del servidor:', result);
+          
+          // Marcar como sincronizado
+          await db.runAsync(
+            `UPDATE clients SET needsSync = 0 WHERE id = ?`,
+            [newId]
+          );
+          
+          console.log('✅ Cliente sincronizado con servidor exitosamente');
+          Alert.alert('Éxito', 'Cliente creado y sincronizado con el servidor');
+        }
+      } catch (syncError: any) {
+        console.error('❌ Error al sincronizar con servidor:', syncError);
+        Alert.alert(
+          '⚠️ Advertencia',
+          `Cliente creado localmente, pero no se pudo sincronizar con el servidor.\n\nError: ${syncError.message}\n\nSe sincronizará automáticamente en la próxima sincronización.`,
+          [{ text: 'OK' }]
+        );
+      }
+
       setShowNewClientDialog(false);
       resetForm();
       loadClients();
