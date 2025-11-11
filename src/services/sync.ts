@@ -607,11 +607,15 @@ export async function incrementalSync(
     }
     
     // 4. Descargar cambios en clientes
-    onProgress?.('Descargando cambios en clientes...');
-    const { getClientChanges } = require('./api');
-    const clientChanges = await getClientChanges(lastSync);
+    // TEMPORALMENTE DESHABILITADO: Endpoint getClientChanges tiene error HTTP 500
+    // TODO: Rehabilitar cuando se corrija el backend
+    onProgress?.('Omitiendo sincronización de clientes (modo temporal)...');
     
     let clientsUpdated = 0;
+    
+    /* DESHABILITADO TEMPORALMENTE
+    const { getClientChanges } = require('./api');
+    const clientChanges = await getClientChanges(lastSync);
     
     if (clientChanges.success && clientChanges.clients) {
       for (const client of clientChanges.clients) {
@@ -646,6 +650,7 @@ export async function incrementalSync(
         clientsUpdated++;
       }
     }
+    */
     
     // Actualizar timestamp de última sincronización
     const now = new Date().toISOString();
