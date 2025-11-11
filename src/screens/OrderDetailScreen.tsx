@@ -187,8 +187,8 @@ export default function OrderDetailScreen() {
       // 7. Guardar el orderId para que el catálogo sepa que está editando un pedido existente
       await AsyncStorage.setItem('editingOrderId', orderId);
 
-      // 8. Navegar a CatalogTabs
-      navigation.navigate('CatalogTabs');
+      // 8. Navegar a Cart (CartScreen) para mostrar el carrito con los items
+      navigation.navigate('Cart' as never);
     } catch (error) {
       console.error('Error al continuar con el pedido:', error);
       Alert.alert('Error', 'No se pudo cargar el pedido');
