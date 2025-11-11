@@ -520,9 +520,9 @@ export async function syncSingleOrder(
     onProgress?.('Obteniendo pedido...');
     const db = getDatabase();
     
-    // Obtener el pedido específico
+    // Obtener el pedido específico (puede ser draft o pending)
     const order = await db.getFirstAsync<PendingOrder>(
-      "SELECT * FROM pending_orders WHERE id = ? AND status = 'pending'",
+      "SELECT * FROM pending_orders WHERE id = ? AND status IN ('draft', 'pending')",
       [orderId]
     );
 

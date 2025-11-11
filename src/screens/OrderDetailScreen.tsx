@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { getDatabase } from '../database/db';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface OrderItem {
   productName: string;
@@ -127,10 +128,70 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleContinueOrder = () => {
-    // Navegar a la pantalla de edición del pedido (PedidosScreen con el orderId)
-    if (orderDetail) {
-      navigation.navigate('Pedidos', { orderId: orderDetail.orderId });
+  const handleContinueOrder = async () => {
+    try {
+      if (!orderDetail) return;
+
+      // 1. Cargar el pedido completo de pending_orders
+      const db = getDatabase();
+      const order = await db.getFirstAsync<any>(
+        'SELECT * FROM pending_orders WHERE id = ?',
+        [orderId]
+      );
+
+      if (!order) {
+        Alert.alert('Error', 'Pedido no encontrado');
+        return;
+      }
+
+      // 2. Cargar el cliente asociado
+      const client = await db.getFirstAsync<any>(
+        'SELECT * FROM clients WHERE id = ?',
+        [order.clientId]
+      );
+
+      if (!client) {
+        Alert.alert('Error', 'Cliente no encontrado');
+        return;
+      }
+
+      // 3. Guardar el cliente en AsyncStorage (como si lo hubiera seleccionado)
+      await AsyncStorage.setItem('selectedClientId', client.id);
+      await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
+
+      // 4. Cargar los items del pedido
+      const items = await db.getAllAsync<any>(
+        'SELECT * FROM pending_order_items WHERE orderId = ?',
+        [orderId]
+      );
+
+      // 5. Cargar los productos completos para cada item
+      const cartItems = [];
+      for (const item of items) {
+        const product = await db.getFirstAsync<any>(
+          'SELECT * FROM products WHERE id = ?',
+          [item.productId]
+        );
+        
+        if (product) {
+          cartItems.push({
+            product: product,
+            quantity: item.quantity,
+          });
+        }
+      }
+
+      // 6. Guardar los items en AsyncStorage como carrito
+      await AsyncStorage.setItem('@cart', JSON.stringify(cartItems));
+
+      // 7. Guardar el orderId para que el catálogo sepa que está editando un pedido existente
+      await AsyncStorage.setItem('editingOrderId', orderId);
+
+      // 8. Navegar a CatalogTabs
+      navigation.navigate('CatalogTabs');
+    } catch (error) {
+      console.error('Error al continuar con el pedido:', error);
+      Alert.alert('Error', 'No se pudo cargar el pedido');
     }
   };
 

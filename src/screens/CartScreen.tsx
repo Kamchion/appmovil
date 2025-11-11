@@ -222,29 +222,64 @@ export default function CartScreen({ navigation }: CartScreenProps) {
               const { getDatabase } = require('../database/db');
               const { generateOrderNumber } = require('../utils/orderNumber');
               const db = getDatabase();
-              const orderId = await generateOrderNumber();
               const now = new Date().toISOString();
 
-              // Guardar pedido como BORRADOR en la base de datos local
-              // ✅ status = 'draft' para que NO se sincronice automáticamente
-              await db.runAsync(
-                `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
-              );
+              // Verificar si está editando un pedido existente
+              const editingOrderId = await AsyncStorage.getItem('editingOrderId');
 
-              // Guardar items del pedido
-              for (const item of cart) {
-                const itemId = `${orderId}-${item.product.id}`;
+              let orderId;
+              if (editingOrderId) {
+                // ACTUALIZAR pedido existente
+                orderId = editingOrderId;
+                
+                // Actualizar el pedido
                 await db.runAsync(
-                  `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                  `UPDATE pending_orders 
+                   SET customerNote = ?, subtotal = ?, tax = ?, total = ? 
+                   WHERE id = ?`,
+                  [customerNote || '', subtotal.toString(), tax.toString(), total.toString(), orderId]
                 );
+
+                // Eliminar items antiguos
+                await db.runAsync(
+                  'DELETE FROM pending_order_items WHERE orderId = ?',
+                  [orderId]
+                );
+
+                // Insertar items actualizados
+                for (const item of cart) {
+                  const itemId = `${orderId}-${item.product.id}`;
+                  await db.runAsync(
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                  );
+                }
+              } else {
+                // CREAR nuevo pedido
+                orderId = await generateOrderNumber();
+
+                // Guardar pedido como BORRADOR en la base de datos local
+                // ✅ status = 'draft' para que NO se sincronice automáticamente
+                await db.runAsync(
+                  `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                  [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
+                );
+
+                // Guardar items del pedido
+                for (const item of cart) {
+                  const itemId = `${orderId}-${item.product.id}`;
+                  await db.runAsync(
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                  );
+                }
               }
 
-              // Limpiar carrito y cliente seleccionado
+              // Limpiar carrito, cliente seleccionado y editingOrderId
               await clearCart();
               await AsyncStorage.removeItem('selectedClientId');
               await AsyncStorage.removeItem('selectedClientData');
+              await AsyncStorage.removeItem('editingOrderId');
 
               Alert.alert('Éxito', 'Pedido guardado. Puedes continuar más tarde desde el historial.', [
                 { text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] }) }
@@ -331,6 +366,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 await clearCart();
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
+                await AsyncStorage.removeItem('editingOrderId');
 
                 Alert.alert('✅ Éxito', 'Pedido enviado y guardado correctamente');
 
@@ -359,6 +395,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 await clearCart();
                 await AsyncStorage.removeItem('selectedClientId');
                 await AsyncStorage.removeItem('selectedClientData');
+                await AsyncStorage.removeItem('editingOrderId');
 
                 // Redireccionar al dashboard de vendedores
                 navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] });
