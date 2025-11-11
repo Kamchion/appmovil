@@ -213,8 +213,9 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   logo: {
-    width: 200,
-    height: 200,
+    width: '75%',
+    height: undefined,
+    aspectRatio: 1,
   },
   card: {
     backgroundColor: '#fff',
