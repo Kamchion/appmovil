@@ -80,15 +80,20 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
     });
 
     const handleOrderPress = async () => {
-      // Obtener items del pedido para mostrar detalles
-      const db = getDatabase();
-      const items = await db.getAllAsync<any>(
+      try {
+        console.log('👆 Click en pedido:', item.id);
+        // Obtener items del pedido para mostrar detalles
+        const db = getDatabase();
+        console.log('💾 Obteniendo items del pedido...');
+        const items = await db.getAllAsync<any>(
         `SELECT poi.*, p.name as productName, p.sku 
          FROM pending_order_items poi 
          LEFT JOIN products p ON poi.productId = p.id 
          WHERE poi.orderId = ?`,
         [item.id]
       );
+      
+      console.log('📝 Items encontrados:', items.length);
       
       const itemsText = items.map(i => 
         `${i.productName || 'Producto'} (${i.sku})\n  Cantidad: ${i.quantity} x $${i.pricePerUnit} = $${(i.quantity * parseFloat(i.pricePerUnit)).toFixed(2)}`
@@ -294,6 +299,10 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
           detailText.replace('¿Qué deseas hacer?', ''),
           [{ text: 'Cerrar' }]
         );
+      }
+      } catch (error) {
+        console.error('❌ Error en handleOrderPress:', error);
+        Alert.alert('Error', 'No se pudieron cargar los detalles del pedido: ' + error.message);
       }
     };
 
