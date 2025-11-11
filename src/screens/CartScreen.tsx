@@ -274,15 +274,9 @@ export default function CartScreen({ navigation }: CartScreenProps) {
       return;
     }
 
-    Alert.alert(
-      '¿Confirmar Pedido?',
-      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas crear este pedido?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: async () => {
-            setLoading(true);
+    // Enviar pedido directamente sin confirmación
+    setLoading(true);
+    (async () => {
             try {
               const { createOrderOnline } = require('../services/api');
               const { getDatabase } = require('../database/db');
@@ -362,10 +356,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
             } finally {
               setLoading(false);
             }
-          }
-        }
-      ]
-    );
+    })();
   };
 
   // Calcular totales
