@@ -74,13 +74,11 @@ export async function syncCatalog(
       };
     }
 
-    onProgress?.('Descargando catálogo...');
-    const lastSync = await getLastSyncTimestamp();
+    onProgress?.('Descargando catálogo completo...');
     
-    // Descargar catálogo (completo o incremental)
-    const response = lastSync
-      ? await getChanges(lastSync)
-      : await getCatalog();
+    // ✅ SIEMPRE descargar catálogo completo para garantizar que todas las variantes
+    // y productos estén actualizados, especialmente productos con variantes
+    const response = await getCatalog();
 
     if (!response.success) {
       throw new Error('Error al descargar catálogo');
