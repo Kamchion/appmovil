@@ -12,7 +12,7 @@ import DashboardHomeScreen from './src/screens/DashboardHomeScreen';
 import PedidosScreen from './src/screens/PedidosScreen';
 import ClientesScreen from './src/screens/ClientesScreen';
 import DashboardStatsScreen from './src/screens/DashboardStatsScreen';
-import HistorialScreen from './src/screens/HistorialScreen';
+// import HistorialScreen from './src/screens/HistorialScreen'; // Reemplazado por OrdersScreen
 import CatalogScreen from './src/screens/CatalogScreen';
 import ProductDetailScreen from './src/screens/ProductDetailScreen';
 import CartScreen from './src/screens/CartScreen';
@@ -221,10 +221,10 @@ export default function App() {
                 }}
               />
 
-              {/* Historial */}
+              {/* Historial - Ahora usa OrdersScreen */}
               <Stack.Screen
                 name="Historial"
-                component={HistorialScreen}
+                component={OrdersScreen}
                 options={{ 
                   title: 'Historial de Pedidos',
                   headerStyle: { backgroundColor: '#f97316' },

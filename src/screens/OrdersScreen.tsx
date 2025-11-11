@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Modal,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { PendingOrder } from '../types';
@@ -21,6 +22,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -334,8 +336,8 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         onPress={handleOrderPress}
       >
         <View style={styles.orderHeader}>
-          <View>
-            <Text style={styles.orderId}>Pedido #{item.id.slice(-8)}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.orderId}>{item.orderNumber || item.id}</Text>
             <Text style={styles.orderDate}>{formattedDate}</Text>
           </View>
           <View
@@ -363,6 +365,12 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         <View style={styles.orderFooter}>
           <Text style={styles.totalLabel}>Total:</Text>
           <Text style={styles.totalValue}>${item.total}</Text>
+          <TouchableOpacity 
+            style={styles.viewButton}
+            onPress={handleOrderPress}
+          >
+            <Text style={styles.viewButtonText}>Ver</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -381,26 +389,60 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Mis Pedidos</Text>
           <Text style={styles.headerSubtitle}>
             {orders.length} pedidos • {pendingCount} pendientes
           </Text>
         </View>
-        <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]}>
-          <Text style={styles.statusIndicatorText}>
-            {isOnline ? '🌐' : '📱'}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]}>
+            <Text style={styles.statusIndicatorText}>
+              {isOnline ? '🌐' : '📱'}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.menuButton}
+            onPress={() => setMenuVisible(true)}
+          >
+            <Text style={styles.menuButtonText}>⋮</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {pendingCount > 0 && isOnline && (
-        <TouchableOpacity style={styles.syncBanner} onPress={handleSync}>
-          <Text style={styles.syncBannerText}>
-            ⚡ Tienes {pendingCount} pedido(s) pendiente(s). Toca para sincronizar
-          </Text>
+      {/* Modal de menú */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuModal}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                handleSync();
+              }}
+            >
+              <Text style={styles.menuItemIcon}>🔄</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuItemText}>Sincronizar Todo</Text>
+                {pendingCount > 0 && (
+                  <Text style={styles.menuItemSubtext}>
+                    {pendingCount} pedido(s) pendiente(s)
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-      )}
+      </Modal>
 
       {orders.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -486,11 +528,75 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#fbbf24',
   },
-  syncBannerText: {
-    fontSize: 14,
-    color: '#92400e',
+  emptyText: {
+    fontSize: 16,
+    color: '#64748b',
     textAlign: 'center',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuButtonText: {
+    fontSize: 24,
+    color: '#475569',
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 60,
+    paddingRight: 16,
+  },
+  menuModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    minWidth: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  menuItemIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: '#1e293b',
     fontWeight: '600',
+  },
+  menuItemSubtext: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  viewButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  viewButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+}); fontWeight: '600',
   },
   listContainer: {
     padding: 16,

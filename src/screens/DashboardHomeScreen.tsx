@@ -168,15 +168,6 @@ export default function DashboardHomeScreen() {
       bgColor: '#ffedd5',
       screen: 'Historial',
     },
-    {
-      id: 'fullsync',
-      title: 'Sincronizar Todo',
-      icon: '🔄',
-      description: 'Descargar todo el catálogo nuevamente',
-      color: '#6b7280', // gray
-      bgColor: '#f3f4f6',
-      action: 'fullsync',
-    },
   ];
 
   return (

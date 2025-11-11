@@ -220,8 +220,9 @@ export default function CartScreen({ navigation }: CartScreenProps) {
             setLoading(true);
             try {
               const { getDatabase } = require('../database/db');
+              const { generateOrderNumber } = require('../utils/orderNumber');
               const db = getDatabase();
-              const orderId = `PENDING-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+              const orderId = await generateOrderNumber();
               const now = new Date().toISOString();
 
               // Guardar pedido como BORRADOR en la base de datos local
@@ -338,7 +339,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
 
               } catch (apiError: any) {
                 console.log('⚠️ Guardando localmente...');
-                const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+                const { generateOrderNumber } = require('../utils/orderNumber');
+                const orderId = await generateOrderNumber();
                 const now = new Date().toISOString();
 
                 await db.runAsync(
