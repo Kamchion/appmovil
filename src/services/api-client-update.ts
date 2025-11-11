@@ -43,7 +43,7 @@ function parseTRPCResponse(data: any): any {
  */
 export async function updateClientOnServer(
   token: string,
-  clientId: string,
+  clientNumber: string,
   updates: {
     name?: string;
     email?: string;
@@ -61,7 +61,7 @@ export async function updateClientOnServer(
   }
 ): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('[updateClientOnServer] Actualizando cliente:', clientId);
+    console.log('[updateClientOnServer] Actualizando cliente:', clientNumber);
     console.log('[updateClientOnServer] Updates:', updates);
 
     // ✅ CORRECCIÓN: Usar el formato correcto de tRPC batch con json wrapper
@@ -74,7 +74,7 @@ export async function updateClientOnServer(
       body: JSON.stringify({
         "0": {
           json: {
-            clientId,
+            clientNumber,
             updates,
           }
         }

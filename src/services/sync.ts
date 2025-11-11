@@ -551,7 +551,7 @@ export async function incrementalSync(
         } else {
           // Cliente existente modificado - usar updateClientOnServer
           console.log(`🔄 Actualizando cliente existente: ${client.companyName}`);
-          await updateClientOnServer(client.id, {
+          await updateClientOnServer(token, client.clientNumber, {
             name: client.name,
             email: client.email,
             phone: client.phone,
@@ -641,15 +641,13 @@ export async function incrementalSync(
     }
     
     // 4. Descargar cambios en clientes
-    // TEMPORALMENTE DESHABILITADO: Endpoint getClientChanges tiene error HTTP 500
-    // TODO: Rehabilitar cuando se corrija el backend
-    onProgress?.('Omitiendo sincronización de clientes (modo temporal)...');
+    onProgress?.('Descargando cambios en clientes...');
     
     let clientsUpdated = 0;
     
-    /* DESHABILITADO TEMPORALMENTE
-    const { getClientChanges } = require('./api');
-    const clientChanges = await getClientChanges(lastSync);
+    try {
+      const { getClientChanges } = require('./api');
+      const clientChanges = await getClientChanges(lastSync);
     
     if (clientChanges.success && clientChanges.clients) {
       for (const client of clientChanges.clients) {
@@ -684,7 +682,10 @@ export async function incrementalSync(
         clientsUpdated++;
       }
     }
-    */
+    } catch (error: any) {
+      console.error('❌ Error al descargar cambios de clientes:', error.message);
+      // Continuar aunque falle la descarga de clientes
+    }
     
     // Actualizar timestamp de última sincronización
     const now = new Date().toISOString();

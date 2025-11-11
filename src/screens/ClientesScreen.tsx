@@ -282,7 +282,7 @@ export default function ClientesScreen() {
         } else {
           console.log('🔄 Sincronizando cliente con servidor...');
           console.log('Token:', token.substring(0, 20) + '...');
-          console.log('Client ID:', editingClient!.id);
+          console.log('Client Number:', formData.clientNumber);
           console.log('Updates:', {
             name: formData.contactPerson,
             companyName: formData.companyName,
@@ -291,7 +291,7 @@ export default function ClientesScreen() {
             priceType: formData.priceType,
           });
           
-          const result = await updateClientOnServer(token, editingClient!.id, {
+          const result = await updateClientOnServer(token, formData.clientNumber, {
             name: formData.contactPerson,
             companyName: formData.companyName,
             email: formData.email || '',
