@@ -8,10 +8,11 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  BackHandler,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { PendingOrder } from '../types';
-import { syncPendingOrders, checkConnection } from '../services/sync';
+import { syncPendingOrders, checkConnection, fullSync } from '../services/sync';
 
 interface OrdersScreenProps {
   navigation: any;
@@ -69,6 +70,77 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
 
     await checkConnectionStatus();
     setRefreshing(false);
+  };
+
+  const handleSyncAll = async () => {
+    setMenuVisible(false);
+    setRefreshing(true);
+
+    const result = await fullSync((message) => {
+      console.log('Full sync progress:', message);
+    });
+
+    if (result.success) {
+      Alert.alert('Éxito', 'Sincronización completa exitosa');
+      await loadOrders();
+    } else {
+      Alert.alert('Error', result.message);
+    }
+
+    await checkConnectionStatus();
+    setRefreshing(false);
+  };
+
+  const handleDeleteAll = async () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Confirmar',
+      '¿Está seguro que desea borrar todos los datos locales? Esta acción no se puede deshacer.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Borrar Todo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = getDatabase();
+              await db.execAsync('DELETE FROM pending_orders');
+              await db.execAsync('DELETE FROM pending_order_items');
+              await db.execAsync('DELETE FROM order_history');
+              await db.execAsync('DELETE FROM order_history_items');
+              await db.execAsync('DELETE FROM products');
+              await db.execAsync('DELETE FROM clients');
+              Alert.alert('Éxito', 'Todos los datos han sido eliminados');
+              await loadOrders();
+            } catch (error) {
+              console.error('Error al borrar datos:', error);
+              Alert.alert('Error', 'No se pudieron borrar los datos');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExitApp = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Salir',
+      '¿Desea salir de la aplicación?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Salir',
+          onPress: () => BackHandler.exitApp(),
+        },
+      ]
+    );
   };
 
   const renderOrder = ({ item }: { item: PendingOrder }) => {
@@ -402,10 +474,10 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
             </Text>
           </View>
           <TouchableOpacity 
-            style={styles.menuButton}
+            style={styles.menuIconButton}
             onPress={() => setMenuVisible(true)}
           >
-            <Text style={styles.menuButtonText}>⋮</Text>
+            <Text style={styles.menuIconButtonText}>⋮</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -424,21 +496,31 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         >
           <View style={styles.menuModal}>
             <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuVisible(false);
-                handleSync();
-              }}
+              style={styles.menuButton}
+              onPress={handleSyncAll}
             >
-              <Text style={styles.menuItemIcon}>🔄</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.menuItemText}>Sincronizar Todo</Text>
-                {pendingCount > 0 && (
-                  <Text style={styles.menuItemSubtext}>
-                    {pendingCount} pedido(s) pendiente(s)
-                  </Text>
-                )}
-              </View>
+              <Text style={styles.menuButtonText}>Sincronizar Todo</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.menuButton, styles.deleteButton]}
+              onPress={handleDeleteAll}
+            >
+              <Text style={[styles.menuButtonText, styles.deleteButtonText]}>Borrar Todo</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={handleExitApp}
+            >
+              <Text style={styles.menuButtonText}>Salir de la App</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.menuButton, styles.cancelButton]}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.menuButtonText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -533,7 +615,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
   },
-  menuButton: {
+  menuIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -541,49 +623,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuButtonText: {
+  menuIconButtonText: {
     fontSize: 24,
     color: '#475569',
     fontWeight: 'bold',
   },
+  menuButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 60,
-    paddingRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   menuModal: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    minWidth: 250,
+    width: '80%',
+    maxWidth: 320,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  menuButton: {
+    backgroundColor: '#3b82f6',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
   },
-  menuItemIcon: {
-    fontSize: 24,
-    marginRight: 12,
+  deleteButton: {
+    backgroundColor: '#ef4444',
   },
-  menuItemText: {
-    fontSize: 16,
-    color: '#1e293b',
-    fontWeight: '600',
+  cancelButton: {
+    backgroundColor: '#64748b',
+    marginBottom: 0,
   },
-  menuItemSubtext: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
+  deleteButtonText: {
+    color: '#fff',
   },
   viewButton: {
     backgroundColor: '#3b82f6',
