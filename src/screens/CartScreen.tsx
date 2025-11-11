@@ -657,9 +657,13 @@ const styles = StyleSheet.create({
     width: 50,
     height: 32,
     textAlign: 'center',
+    textAlignVertical: 'center',  // ✅ Centrar verticalmente
     fontSize: 14,
     fontWeight: '600',
     color: '#1e293b',
+    padding: 0,  // ✅ Eliminar padding interno
+    paddingTop: 0,  // ✅ Eliminar padding superior
+    includeFontPadding: false,  // ✅ Eliminar padding de fuente (Android)
   },
   itemSubtotal: {
     fontSize: 16,
