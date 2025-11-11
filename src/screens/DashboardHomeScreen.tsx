@@ -8,8 +8,6 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
-  Modal,
-  BackHandler,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { fullSync, incrementalSync, checkConnection } from '../services/sync';
@@ -24,7 +22,6 @@ export default function DashboardHomeScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
-  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     checkConnectionStatus();
@@ -134,99 +131,7 @@ export default function DashboardHomeScreen() {
     );
   };
 
-  const handleSyncAll = async () => {
-    setMenuVisible(false);
-    if (!isOnline) {
-      Alert.alert(
-        'Sin conexión',
-        'No hay conexión a internet.'
-      );
-      return;
-    }
-    setIsSyncing(true);
-    setSyncMessage('Descargando todo el catálogo...');
 
-    try {
-      const result = await fullSync((message) => {
-        setSyncMessage(message);
-      });
-
-      if (result.success) {
-        Alert.alert(
-          '✅ Sincronización Completa',
-          `${result.productsUpdated} productos actualizados\n${result.ordersSynced} pedidos sincronizados`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          '⚠️ Error',
-          result.message,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error: any) {
-      Alert.alert(
-        '❌ Error',
-        error.message || 'Error desconocido',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsSyncing(false);
-      setSyncMessage('');
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    setMenuVisible(false);
-    Alert.alert(
-      'Confirmar',
-      '¿Está seguro que desea borrar todos los datos locales? Esta acción no se puede deshacer.',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Borrar Todo',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { getDatabase } = await import('../database/db');
-              const db = getDatabase();
-              await db.execAsync('DELETE FROM pending_orders');
-              await db.execAsync('DELETE FROM pending_order_items');
-              await db.execAsync('DELETE FROM order_history');
-              await db.execAsync('DELETE FROM order_history_items');
-              await db.execAsync('DELETE FROM products');
-              await db.execAsync('DELETE FROM clients');
-              Alert.alert('Éxito', 'Todos los datos han sido eliminados');
-            } catch (error) {
-              console.error('Error al borrar datos:', error);
-              Alert.alert('Error', 'No se pudieron borrar los datos');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExitApp = () => {
-    setMenuVisible(false);
-    Alert.alert(
-      'Salir',
-      '¿Desea salir de la aplicación?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Salir',
-          onPress: () => BackHandler.exitApp(),
-        },
-      ]
-    );
-  };
 
   const menuItems = [
     {
@@ -302,59 +207,8 @@ export default function DashboardHomeScreen() {
             </>
           )}
           </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.menuIconButton}
-            onPress={() => setMenuVisible(true)}
-          >
-            <Text style={styles.menuIconButtonText}>⋮</Text>
-          </TouchableOpacity>
         </View>
       </View>
-
-      {/* Modal de menú */}
-      <Modal
-        visible={menuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuModal}>
-            <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={handleSyncAll}
-            >
-              <Text style={styles.menuButtonText}>Sincronizar Todo</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.menuButton, styles.deleteButton]}
-              onPress={handleDeleteAll}
-            >
-              <Text style={[styles.menuButtonText, styles.deleteButtonText]}>Borrar Todo</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={handleExitApp}
-            >
-              <Text style={styles.menuButtonText}>Salir de la App</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.menuButton, styles.cancelButton]}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Sync Progress Message */}
       {isSyncing && syncMessage && (
@@ -422,60 +276,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  menuIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuIconButtonText: {
-    fontSize: 24,
-    color: '#475569',
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  menuModal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '80%',
-    maxWidth: 320,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuButton: {
-    backgroundColor: '#3b82f6',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  deleteButton: {
-    backgroundColor: '#ef4444',
-  },
-  cancelButton: {
-    backgroundColor: '#64748b',
-    marginBottom: 0,
-  },
-  menuButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  deleteButtonText: {
-    color: '#fff',
-  },
+
   statusDot: {
     width: 10,
     height: 10,

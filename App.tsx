@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Text, TouchableOpacity, Alert, View } from 'react-native';
+import { Text, TouchableOpacity, Alert, View, Modal, BackHandler, StyleSheet } from 'react-native';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -33,6 +33,7 @@ const Tab = createBottomTabNavigator();
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -123,22 +124,86 @@ export default function App() {
   };
 
   const showOptionsMenu = () => {
+    setMenuVisible(true);
+  };
+
+  const handleSyncAll = async () => {
+    setMenuVisible(false);
     Alert.alert(
-      'Opciones',
-      'Selecciona una opción',
+      'Sincronizar Todo',
+      'Esto descargará toda la base de datos, fotos y pedidos nuevamente. ¿Continuar?',
       [
-        {
-          text: 'Reset de Datos',
-          onPress: handleReset,
-        },
-        {
-          text: 'Cerrar Sesión',
-          onPress: handleLogout,
-          style: 'destructive',
-        },
         {
           text: 'Cancelar',
           style: 'cancel',
+        },
+        {
+          text: 'Sincronizar',
+          onPress: async () => {
+            try {
+              const { fullSync } = await import('./src/services/sync');
+              const result = await fullSync(() => {});
+              if (result.success) {
+                Alert.alert('Éxito', 'Sincronización completa exitosa');
+              } else {
+                Alert.alert('Error', result.message);
+              }
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Error al sincronizar');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAll = async () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Confirmar',
+      '¿Está seguro que desea borrar todos los datos locales? Esta acción no se puede deshacer.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Borrar Todo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { getDatabase } = await import('./src/database/db');
+              const db = getDatabase();
+              await db.execAsync('DELETE FROM pending_orders');
+              await db.execAsync('DELETE FROM pending_order_items');
+              await db.execAsync('DELETE FROM order_history');
+              await db.execAsync('DELETE FROM order_history_items');
+              await db.execAsync('DELETE FROM products');
+              await db.execAsync('DELETE FROM clients');
+              Alert.alert('Éxito', 'Todos los datos han sido eliminados');
+            } catch (error) {
+              console.error('Error al borrar datos:', error);
+              Alert.alert('Error', 'No se pudieron borrar los datos');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExitApp = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Salir',
+      '¿Desea salir de la aplicación?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Salir',
+          onPress: () => BackHandler.exitApp(),
         },
       ]
     );
@@ -151,6 +216,51 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
+      
+      {/* Modal de menú */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuModal}>
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={handleSyncAll}
+            >
+              <Text style={styles.menuButtonText}>Sincronizar Todo</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.menuButton, styles.deleteButton]}
+              onPress={handleDeleteAll}
+            >
+              <Text style={styles.menuButtonText}>Borrar Todo</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={handleExitApp}
+            >
+              <Text style={styles.menuButtonText}>Salir de la App</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.menuButton, styles.cancelButton]}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.menuButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
       <NavigationContainer>
         <Stack.Navigator
           screenOptions={{
@@ -274,3 +384,44 @@ export default function App() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  menuModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '80%',
+    maxWidth: 320,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuButton: {
+    backgroundColor: '#3b82f6',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  deleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  cancelButton: {
+    backgroundColor: '#64748b',
+    marginBottom: 0,
+  },
+  menuButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+});

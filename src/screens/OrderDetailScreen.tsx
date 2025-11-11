@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { getDatabase } from '../database/db';
@@ -37,6 +38,7 @@ export default function OrderDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     loadOrderDetail();
@@ -116,12 +118,82 @@ export default function OrderDetailScreen() {
         createdAt: order.createdAt || '',
         items,
       });
+      setIsPending(foundInPending);
     } catch (error) {
       console.error('Error cargando detalles del pedido:', error);
       Alert.alert('Error', 'No se pudieron cargar los detalles del pedido');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinueOrder = () => {
+    // Navegar a la pantalla de edición del pedido (PedidosScreen con el orderId)
+    Alert.alert(
+      'Continuar con el pedido',
+      'Esta funcionalidad aún no está implementada. Se abrirá la pantalla de edición del pedido.',
+      [{ text: 'OK' }]
+    );
+    // TODO: navigation.navigate('Pedidos', { orderId: orderDetail?.orderId });
+  };
+
+  const handleSendOrder = async () => {
+    Alert.alert(
+      'Enviar pedido',
+      '¿Desea enviar este pedido al servidor?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Enviar',
+          onPress: async () => {
+            try {
+              const { syncPendingOrders } = await import('../services/sync');
+              const result = await syncPendingOrders(() => {});
+              if (result.success) {
+                Alert.alert('Éxito', 'Pedido enviado correctamente');
+                navigation.goBack();
+              } else {
+                Alert.alert('Error', result.message);
+              }
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Error al enviar el pedido');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteOrder = () => {
+    Alert.alert(
+      'Eliminar pedido',
+      '¿Está seguro que desea eliminar este pedido? Esta acción no se puede deshacer.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = getDatabase();
+              await db.execAsync('DELETE FROM pending_orders WHERE id = ?', [orderId]);
+              await db.execAsync('DELETE FROM pending_order_items WHERE orderId = ?', [orderId]);
+              Alert.alert('Éxito', 'Pedido eliminado correctamente');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Error al eliminar pedido:', error);
+              Alert.alert('Error', 'No se pudo eliminar el pedido');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -219,6 +291,32 @@ export default function OrderDetailScreen() {
         <Text style={styles.sectionTitle}>Fecha de Creación</Text>
         <Text style={styles.date}>{new Date(orderDetail.createdAt).toLocaleString()}</Text>
       </View>
+
+      {/* Botones de acción para pedidos pendientes */}
+      {isPending && (
+        <View style={styles.actionsSection}>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.continueButton]}
+            onPress={handleContinueOrder}
+          >
+            <Text style={styles.actionButtonText}>Continuar con el pedido</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.sendButton]}
+            onPress={handleSendOrder}
+          >
+            <Text style={styles.actionButtonText}>Enviar el pedido</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={handleDeleteOrder}
+          >
+            <Text style={styles.actionButtonText}>Eliminar el pedido</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -382,5 +480,29 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  actionsSection: {
+    padding: 16,
+    paddingBottom: 32,
+    gap: 12,
+  },
+  actionButton: {
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  continueButton: {
+    backgroundColor: '#3b82f6',
+  },
+  sendButton: {
+    backgroundColor: '#10b981',
+  },
+  deleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  actionButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
