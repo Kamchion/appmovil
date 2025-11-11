@@ -24,16 +24,20 @@ export async function updateClientOnServer(
 ): Promise<{ success: boolean; message: string }> {
   try {
     console.log('[updateClientOnServer] Actualizando cliente:', clientId);
+    console.log('[updateClientOnServer] Updates:', updates);
 
-    const response = await fetch(`${TRPC_BASE_URL}/sync.updateClient`, {
+    // tRPC requiere formato batch con input en json
+    const response = await fetch(`${TRPC_BASE_URL}/sync.updateClient?batch=1`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        clientId,
-        updates,
+        "0": {
+          clientId,
+          updates,
+        }
       }),
     });
 
