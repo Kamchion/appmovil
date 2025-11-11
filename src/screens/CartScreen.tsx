@@ -383,13 +383,6 @@ export default function CartScreen({ navigation }: CartScreenProps) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1e293b" />
-            <Text style={styles.backButtonText}>Volver al Catálogo</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.emptyContainer}>
@@ -411,13 +404,6 @@ export default function CartScreen({ navigation }: CartScreenProps) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
-          <Text style={styles.backButtonText}>Volver al Catálogo</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
