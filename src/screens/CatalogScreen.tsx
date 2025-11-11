@@ -45,16 +45,24 @@ interface CatalogScreenProps {
   navigation: any;
 }
 
-// Componente para cada variante en el modal
-const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; priceType?: string; onAddToCart: () => void }) => {
-  // Validación defensiva: verificar que variant tiene datos mínimos
+// Componente para cada variante en el modal (sin botón individual)
+const VariantItem = ({ 
+  variant, 
+  priceType, 
+  quantity,
+  onQuantityChange 
+}: { 
+  variant: Product; 
+  priceType?: string; 
+  quantity: number;
+  onQuantityChange: (variantId: string, qty: number) => void;
+}) => {
+  // Validación defensiva
   if (!variant || !variant.id || !variant.sku || !variant.name) {
     console.error('❌ VariantItem: Variante inválida', variant);
     return null;
   }
   
-  const [quantity, setQuantity] = useState(0);
-  const [adding, setAdding] = useState(false);
   const [imagePath, setImagePath] = useState<string | null>(null);
   const displayPrice = getProductPrice(variant, (priceType as PriceType) || 'ciudad');
   
@@ -68,40 +76,26 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
   const incrementQuantity = () => {
     const minQty = variant.minQuantity || 1;
     if (quantity === 0) {
-      setQuantity(minQty);
+      onQuantityChange(variant.id, minQty);
     } else {
-      setQuantity(prev => prev + 1);
+      onQuantityChange(variant.id, quantity + 1);
     }
   };
 
   const decrementQuantity = () => {
     const minQty = variant.minQuantity || 1;
     if (quantity > minQty) {
-      setQuantity(prev => prev - 1);
+      onQuantityChange(variant.id, quantity - 1);
     } else if (quantity === minQty) {
-      setQuantity(0);
+      onQuantityChange(variant.id, 0);
     }
   };
 
-  const handleAddToCart = async () => {
-    if (adding || quantity === 0) return;
-    
-    setAdding(true);
-    try {
-      const productWithPrice = {
-        ...variant,
-        price: displayPrice.toString(),
-      };
-      
-      await addToCart(productWithPrice, quantity);
-      setQuantity(0);
-      onAddToCart();
-    } catch (error) {
-      console.error('Error al agregar variante al carrito:', error);
-      Alert.alert('Error', 'No se pudo agregar al carrito');
-    } finally {
-      setAdding(false);
-    }
+  const handleQuantityChange = (text: string) => {
+    const numValue = parseInt(text) || 0;
+    const maxStock = variant.stock || 999;
+    const validValue = Math.max(0, Math.min(numValue, maxStock));
+    onQuantityChange(variant.id, validValue);
   };
 
   return (
@@ -126,7 +120,13 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
           >
             <Ionicons name="remove" size={16} color="#64748b" />
           </TouchableOpacity>
-          <Text style={styles.variantQuantityText}>{quantity}</Text>
+          <TextInput
+            style={styles.variantQuantityInput}
+            value={quantity > 0 ? quantity.toString() : ''}
+            onChangeText={handleQuantityChange}
+            keyboardType="numeric"
+            placeholder="0"
+          />
           <TouchableOpacity
             style={styles.variantQuantityButton}
             onPress={incrementQuantity}
@@ -134,13 +134,6 @@ const VariantItem = ({ variant, priceType, onAddToCart }: { variant: Product; pr
             <Ionicons name="add" size={16} color="#64748b" />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.variantAddButton, (adding || quantity === 0) && styles.variantAddButtonDisabled]}
-          onPress={handleAddToCart}
-          disabled={adding || quantity === 0}
-        >
-          <Ionicons name="cart" size={16} color="#ffffff" />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -156,6 +149,8 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   const [hasVariants, setHasVariants] = useState(false);
   const [quantity, setQuantity] = useState(0);
   const [adding, setAdding] = useState(false);
+  // Estado para cantidades de variantes (key: variantId, value: quantity)
+  const [variantQuantities, setVariantQuantities] = useState<Record<string, number>>({});
   
   // Calcular precio según tipo de cliente usando la utilidad
   const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
@@ -340,20 +335,63 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                   <Ionicons name="close" size={28} color="#64748b" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.variantsModalSubtitle}>Selecciona una opción:</Text>
+              <Text style={styles.variantsModalSubtitle}>Selecciona cantidades:</Text>
               <ScrollView style={styles.variantsModalList}>
                 {variants.map((variant) => (
                   <VariantItem
                     key={variant.id}
                     variant={variant}
                     priceType={priceType}
-                    onAddToCart={() => {
-                      setShowVariantsModal(false);
-                      if (onAddToCart) onAddToCart();
+                    quantity={variantQuantities[variant.id] || 0}
+                    onQuantityChange={(variantId, qty) => {
+                      setVariantQuantities(prev => ({
+                        ...prev,
+                        [variantId]: qty
+                      }));
                     }}
                   />
                 ))}
               </ScrollView>
+              {/* Barra fija inferior con botón único */}
+              <View style={styles.variantsModalFooter}>
+                <TouchableOpacity
+                  style={[
+                    styles.variantsAddAllButton,
+                    Object.values(variantQuantities).every(q => q === 0) && styles.variantsAddAllButtonDisabled
+                  ]}
+                  onPress={async () => {
+                    try {
+                      setAdding(true);
+                      // Agregar todos los variantes con cantidad > 0
+                      for (const variant of variants) {
+                        const qty = variantQuantities[variant.id] || 0;
+                        if (qty > 0) {
+                          const productWithPrice = {
+                            ...variant,
+                            price: getProductPrice(variant, (priceType as PriceType) || 'ciudad').toString(),
+                          };
+                          await addToCart(productWithPrice, qty);
+                        }
+                      }
+                      // Limpiar cantidades y cerrar modal
+                      setVariantQuantities({});
+                      setShowVariantsModal(false);
+                      if (onAddToCart) onAddToCart();
+                    } catch (error) {
+                      console.error('Error al agregar variantes:', error);
+                      Alert.alert('Error', 'No se pudieron agregar los productos');
+                    } finally {
+                      setAdding(false);
+                    }
+                  }}
+                  disabled={Object.values(variantQuantities).every(q => q === 0) || adding}
+                >
+                  <Ionicons name="cart" size={24} color="#ffffff" />
+                  <Text style={styles.variantsAddAllButtonText}>
+                    {adding ? 'Agregando...' : 'Agregar al Carrito'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -1467,6 +1505,19 @@ const styles = StyleSheet.create({
     minWidth: 30,
     textAlign: 'center',
   },
+  variantQuantityInput: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    minWidth: 50,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#ffffff',
+  },
   variantAddButton: {
     backgroundColor: '#2563eb',
     borderRadius: 6,
@@ -1474,5 +1525,29 @@ const styles = StyleSheet.create({
   },
   variantAddButtonDisabled: {
     opacity: 0.4,
+  },
+  variantsModalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#ffffff',
+  },
+  variantsAddAllButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  variantsAddAllButtonDisabled: {
+    opacity: 0.4,
+  },
+  variantsAddAllButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

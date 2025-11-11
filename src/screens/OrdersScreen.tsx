@@ -79,16 +79,32 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
       minute: '2-digit',
     });
 
-    const handleOrderPress = () => {
-      // Si el pedido NO está sincronizado (pendiente por enviar)
-      if (!item.synced) {
+    const handleOrderPress = async () => {
+      // Obtener items del pedido para mostrar detalles
+      const db = getDatabase();
+      const items = await db.getAllAsync<any>(
+        `SELECT poi.*, p.name as productName, p.sku 
+         FROM pending_order_items poi 
+         LEFT JOIN products p ON poi.productId = p.id 
+         WHERE poi.orderId = ?`,
+        [item.id]
+      );
+      
+      const itemsText = items.map(i => 
+        `${i.productName || 'Producto'} (${i.sku})\n  Cantidad: ${i.quantity} x $${i.pricePerUnit} = $${(i.quantity * parseFloat(i.pricePerUnit)).toFixed(2)}`
+      ).join('\n\n');
+      
+      const detailText = `Pedido #${item.id.slice(-8)}\nCliente: ${item.customerName}\nTotal: $${item.total}\n\nProductos:\n${itemsText}\n\n¿Qué deseas hacer?`;
+      
+      // Si el pedido es un borrador (status='draft')
+      if (item.status === 'draft') {
         Alert.alert(
-          'Pedido Pendiente',
-          `Pedido #${item.id.slice(-8)}\nCliente: ${item.customerName}\nTotal: $${item.total}\n\n¿Qué deseas hacer?`,
+          'Pedido Borrador',
+          detailText,
           [
             { text: 'Cancelar', style: 'cancel' },
             {
-              text: 'Continuar Pedido',
+              text: 'Continuar Editando',
               onPress: async () => {
                 // Cargar items del pedido al carrito
                 try {
@@ -181,9 +197,103 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
             },
           ]
         );
+      } else if (item.status === 'pending' && !item.synced) {
+        // Pedido pendiente (no borrador, esperando sincronización)
+        Alert.alert(
+          'Pedido Pendiente',
+          detailText,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Continuar Editando',
+              onPress: async () => {
+                try {
+                  const db = getDatabase();
+                  const items = await db.getAllAsync(
+                    'SELECT * FROM pending_order_items WHERE orderId = ?',
+                    [item.id]
+                  );
+
+                  await db.runAsync('DELETE FROM cart');
+
+                  for (const orderItem of items) {
+                    await db.runAsync(
+                      `INSERT INTO cart (productId, quantity, createdAt) VALUES (?, ?, ?)`,
+                      [orderItem.productId, orderItem.quantity, new Date().toISOString()]
+                    );
+                  }
+
+                  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                  await AsyncStorage.setItem('selectedClientId', item.clientId);
+
+                  await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [item.id]);
+                  await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [item.id]);
+
+                  navigation.navigate('Cart');
+                  Alert.alert('Éxito', 'Pedido cargado en el carrito.');
+                } catch (error: any) {
+                  console.error('❌ Error al cargar pedido:', error);
+                  Alert.alert('Error', 'No se pudo cargar el pedido: ' + error.message);
+                }
+              },
+            },
+            {
+              text: 'Enviar Pedido',
+              onPress: async () => {
+                try {
+                  const { createOrderOnline } = require('../services/api');
+                  const db = getDatabase();
+                  
+                  const items = await db.getAllAsync(
+                    'SELECT * FROM pending_order_items WHERE orderId = ?',
+                    [item.id]
+                  );
+
+                  const cart = [];
+                  for (const orderItem of items) {
+                    const product = await db.getAllAsync(
+                      'SELECT * FROM products WHERE id = ?',
+                      [orderItem.productId]
+                    );
+                    if (product.length > 0) {
+                      cart.push({
+                        product: {
+                          id: product[0].id,
+                          name: product[0].name,
+                          sku: product[0].sku,
+                          price: orderItem.pricePerUnit,
+                        },
+                        quantity: orderItem.quantity,
+                      });
+                    }
+                  }
+
+                  await createOrderOnline({
+                    cart,
+                    customerNote: item.customerNote || '',
+                    selectedClientId: item.clientId,
+                  });
+
+                  await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [item.id]);
+                  await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [item.id]);
+
+                  Alert.alert('Éxito', 'Pedido enviado correctamente');
+                  await loadOrders();
+                } catch (error: any) {
+                  console.error('❌ Error al enviar pedido:', error);
+                  Alert.alert('Error', 'No se pudo enviar el pedido: ' + error.message);
+                }
+              },
+            },
+          ]
+        );
       } else {
-        // Si está sincronizado, mostrar detalle
-        navigation.navigate('OrderDetail', { orderId: item.id });
+        // Pedido sincronizado - solo mostrar detalles
+        Alert.alert(
+          'Pedido Sincronizado',
+          detailText.replace('¿Qué deseas hacer?', ''),
+          [{ text: 'Cerrar' }]
+        );
       }
     };
 
