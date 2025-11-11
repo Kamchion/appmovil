@@ -268,22 +268,21 @@ export default function OrderDetailScreen() {
                 console.log('💾 Guardando pedido en historial local...');
                 await db.runAsync(
                   `INSERT INTO order_history (
-                    id, orderNumber, clientId, customerName, clientName, customerNote,
+                    id, orderNumber, clientId, customerName, customerNote,
                     subtotal, tax, total, status, synced, createdAt
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                   [
                     order.id,
                     sentOrderNumber,
                     order.clientId,
                     order.customerName,
-                    order.clientName,
                     order.customerNote,
                     order.subtotal,
                     order.tax,
                     order.total,
                     'enviado',
                     1,
-                    now
+                    order.createdAt  // Usar fecha original, no now
                   ]
                 );
 
@@ -291,16 +290,16 @@ export default function OrderDetailScreen() {
                 for (const item of items) {
                   await db.runAsync(
                     `INSERT INTO order_history_items (
-                      id, orderId, productId, sku, quantity, pricePerUnit, price
+                      id, orderId, productId, productName, quantity, pricePerUnit, subtotal
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [
                       item.id,
                       item.orderId,
                       item.productId,
-                      item.sku,
+                      item.productName,
                       item.quantity,
                       item.pricePerUnit,
-                      item.price,
+                      item.subtotal,
                     ]
                   );
                 }

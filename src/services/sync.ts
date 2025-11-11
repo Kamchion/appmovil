@@ -440,17 +440,16 @@ export async function syncPendingOrders(
           // Insertar en order_history con número B y status "enviado"
           await db.runAsync(
             `INSERT INTO order_history (
-              id, orderNumber, clientId, customerName, clientName, customerNote, notes,
-              total, tax, status, synced, createdAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              id, orderNumber, clientId, customerName, customerNote,
+              subtotal, total, tax, status, synced, createdAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               order.id,
               sentOrderNumber, // Nuevo número B
               order.clientId,
               order.customerName,
-              order.clientName,
               order.customerNote,
-              order.notes,
+              order.subtotal,
               order.total,
               order.tax,
               'enviado', // Status cambiado a "enviado"
@@ -463,16 +462,16 @@ export async function syncPendingOrders(
           for (const item of items) {
             await db.runAsync(
               `INSERT INTO order_history_items (
-                id, orderId, productId, sku, quantity, pricePerUnit, price
+                id, orderId, productId, productName, quantity, pricePerUnit, subtotal
               ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
               [
                 item.id,
                 item.orderId,
                 item.productId,
-                item.sku,
+                item.productName,
                 item.quantity,
                 item.pricePerUnit,
-                item.price,
+                item.subtotal,
               ]
             );
           }
