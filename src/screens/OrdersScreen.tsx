@@ -7,12 +7,10 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Modal,
-  BackHandler,
 } from 'react-native';
 import { getDatabase } from '../database/db';
 import { PendingOrder } from '../types';
-import { syncPendingOrders, checkConnection, fullSync } from '../services/sync';
+import { syncPendingOrders, checkConnection } from '../services/sync';
 
 interface OrdersScreenProps {
   navigation: any;
@@ -23,7 +21,6 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -42,10 +39,28 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
   const loadOrders = async () => {
     try {
       const db = getDatabase();
-      const result = await db.getAllAsync<PendingOrder>(
+      
+      // Cargar pedidos pendientes
+      const pendingOrders = await db.getAllAsync<PendingOrder>(
         'SELECT * FROM pending_orders ORDER BY createdAt DESC'
       );
-      setOrders(result);
+      
+      // Cargar historial de pedidos sincronizados
+      const historyOrders = await db.getAllAsync<PendingOrder>(
+        'SELECT * FROM order_history ORDER BY createdAt DESC'
+      );
+      
+      // Combinar ambas listas
+      const allOrders = [...pendingOrders, ...historyOrders];
+      
+      // Ordenar por fecha
+      allOrders.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA; // Más recientes primero
+      });
+      
+      setOrders(allOrders);
     } catch (error) {
       console.error('Error al cargar pedidos:', error);
       Alert.alert('Error', 'No se pudieron cargar los pedidos');
@@ -72,76 +87,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
     setRefreshing(false);
   };
 
-  const handleSyncAll = async () => {
-    setMenuVisible(false);
-    setRefreshing(true);
 
-    const result = await fullSync((message) => {
-      console.log('Full sync progress:', message);
-    });
-
-    if (result.success) {
-      Alert.alert('Éxito', 'Sincronización completa exitosa');
-      await loadOrders();
-    } else {
-      Alert.alert('Error', result.message);
-    }
-
-    await checkConnectionStatus();
-    setRefreshing(false);
-  };
-
-  const handleDeleteAll = async () => {
-    setMenuVisible(false);
-    Alert.alert(
-      'Confirmar',
-      '¿Está seguro que desea borrar todos los datos locales? Esta acción no se puede deshacer.',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Borrar Todo',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const db = getDatabase();
-              await db.execAsync('DELETE FROM pending_orders');
-              await db.execAsync('DELETE FROM pending_order_items');
-              await db.execAsync('DELETE FROM order_history');
-              await db.execAsync('DELETE FROM order_history_items');
-              await db.execAsync('DELETE FROM products');
-              await db.execAsync('DELETE FROM clients');
-              Alert.alert('Éxito', 'Todos los datos han sido eliminados');
-              await loadOrders();
-            } catch (error) {
-              console.error('Error al borrar datos:', error);
-              Alert.alert('Error', 'No se pudieron borrar los datos');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExitApp = () => {
-    setMenuVisible(false);
-    Alert.alert(
-      'Salir',
-      '¿Desea salir de la aplicación?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Salir',
-          onPress: () => BackHandler.exitApp(),
-        },
-      ]
-    );
-  };
 
   const renderOrder = ({ item }: { item: PendingOrder }) => {
     const date = new Date(item.createdAt);
@@ -467,64 +413,12 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
             {orders.length} pedidos • {pendingCount} pendientes
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]}>
-            <Text style={styles.statusIndicatorText}>
-              {isOnline ? '🌐' : '📱'}
-            </Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.menuIconButton}
-            onPress={() => setMenuVisible(true)}
-          >
-            <Text style={styles.menuIconButtonText}>⋮</Text>
-          </TouchableOpacity>
+        <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]}>
+          <Text style={styles.statusIndicatorText}>
+            {isOnline ? '🌐' : '📱'}
+          </Text>
         </View>
       </View>
-
-      {/* Modal de menú */}
-      <Modal
-        visible={menuVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuModal}>
-            <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={handleSyncAll}
-            >
-              <Text style={styles.menuButtonText}>Sincronizar Todo</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.menuButton, styles.deleteButton]}
-              onPress={handleDeleteAll}
-            >
-              <Text style={[styles.menuButtonText, styles.deleteButtonText]}>Borrar Todo</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={handleExitApp}
-            >
-              <Text style={styles.menuButtonText}>Salir de la App</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.menuButton, styles.cancelButton]}
-              onPress={() => setMenuVisible(false)}
-            >
-              <Text style={styles.menuButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {orders.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -615,60 +509,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
   },
-  menuIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuIconButtonText: {
-    fontSize: 24,
-    color: '#475569',
-    fontWeight: 'bold',
-  },
-  menuButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  menuModal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: '80%',
-    maxWidth: 320,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  menuButton: {
-    backgroundColor: '#3b82f6',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  deleteButton: {
-    backgroundColor: '#ef4444',
-  },
-  cancelButton: {
-    backgroundColor: '#64748b',
-    marginBottom: 0,
-  },
-  deleteButtonText: {
-    color: '#fff',
-  },
+
   viewButton: {
     backgroundColor: '#3b82f6',
     paddingHorizontal: 20,
