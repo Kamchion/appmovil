@@ -44,55 +44,47 @@ export default function OrderDetailScreen() {
 
   const loadOrderDetail = async () => {
     try {
-      console.log('📋 OrderDetailScreen - Cargando pedido:', orderId, 'isPending:', isPending);
+      console.log('📋 OrderDetailScreen - Cargando pedido:', orderId);
       const db = getDatabase();
 
-      // Obtener información del pedido
-      let order;
-      if (isPending) {
-        console.log('🔍 Buscando en pending_orders...');
-        order = await db.getFirstAsync<any>(
-          'SELECT * FROM pending_orders WHERE id = ?',
-          [orderId]
-        );
-      } else {
-        console.log('🔍 Buscando en order_history...');
+      // Buscar primero en pending_orders (donde están TODOS los pedidos locales)
+      console.log('🔍 Buscando en pending_orders...');
+      let order = await db.getFirstAsync<any>(
+        'SELECT * FROM pending_orders WHERE id = ?',
+        [orderId]
+      );
+      
+      let itemsTableName = 'pending_order_items';
+      let foundInPending = !!order;
+      
+      // Si no está en pending_orders, buscar en order_history
+      if (!order) {
+        console.log('🔍 No encontrado en pending_orders, buscando en order_history...');
         order = await db.getFirstAsync<any>(
           'SELECT * FROM order_history WHERE id = ?',
           [orderId]
         );
+        itemsTableName = 'order_history_items';
       }
 
-      console.log('📦 Pedido encontrado:', order ? 'SÍ' : 'NO');
+      console.log('📦 Pedido encontrado:', order ? 'SÍ' : 'NO', foundInPending ? '(en pending_orders)' : '(en order_history)');
       
       if (!order) {
-        console.error('❌ Pedido no encontrado en la BD');
+        console.error('❌ Pedido no encontrado en ninguna tabla');
         Alert.alert('Error', 'Pedido no encontrado');
         navigation.goBack();
         return;
       }
 
-      // Obtener items del pedido con JOIN a productos para obtener nombres
-      let itemsRaw: any[] = [];
-      if (isPending) {
-        console.log('🔍 Buscando items en pending_order_items...');
-        itemsRaw = await db.getAllAsync<any>(
-          `SELECT poi.*, p.name as productName, p.sku as productSku 
-           FROM pending_order_items poi 
-           LEFT JOIN products p ON poi.productId = p.id 
-           WHERE poi.orderId = ?`,
-          [orderId]
-        );
-      } else {
-        console.log('🔍 Buscando items en order_history_items...');
-        itemsRaw = await db.getAllAsync<any>(
-          `SELECT ohi.*, p.name as productName, p.sku as productSku 
-           FROM order_history_items ohi 
-           LEFT JOIN products p ON ohi.productId = p.id 
-           WHERE ohi.orderId = ?`,
-          [orderId]
-        );
-      }
+      // Obtener items del pedido con JOIN a productos
+      console.log('🔍 Buscando items en', itemsTableName, '...');
+      const itemsRaw = await db.getAllAsync<any>(
+        `SELECT items.*, p.name as productName, p.sku as productSku 
+         FROM ${itemsTableName} items 
+         LEFT JOIN products p ON items.productId = p.id 
+         WHERE items.orderId = ?`,
+        [orderId]
+      );
 
       console.log('📦 Items encontrados:', itemsRaw.length);
       console.log('📝 Items raw:', JSON.stringify(itemsRaw, null, 2));
