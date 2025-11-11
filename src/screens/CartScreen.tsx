@@ -224,10 +224,11 @@ export default function CartScreen({ navigation }: CartScreenProps) {
               const orderId = `PENDING-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
               const now = new Date().toISOString();
 
-              // Guardar pedido pendiente en la base de datos local
+              // Guardar pedido como BORRADOR en la base de datos local
+              // ✅ status = 'draft' para que NO se sincronice automáticamente
               await db.runAsync(
                 `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'pending', now]
+                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
               );
 
               // Guardar items del pedido

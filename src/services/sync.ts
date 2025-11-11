@@ -67,7 +67,7 @@ export async function syncCatalog(
     const isOnline = await checkConnection();
     
     if (!isOnline) {
-      return {
+        return {
         success: false,
         message: 'Sin conexión a internet',
         productsUpdated: 0,
@@ -90,12 +90,26 @@ export async function syncCatalog(
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    console.log(`📦 Guardando ${response.products.length} productos en SQLite...`);
+    console.log(`📦 Procesando ${response.products.length} productos...`);
     
-    // Guardar o actualizar productos en la base de datos local
+    // Guardar, actualizar o eliminar productos en la base de datos local
     let savedCount = 0;
+    let deletedCount = 0;
+    
     for (const product of response.products) {
       try {
+        // ✅ Si el producto está inactivo, eliminarlo de la BD local
+        if (product.isActive === false) {
+          await db.runAsync(
+            `DELETE FROM products WHERE id = ?`,
+            [product.id]
+          );
+          deletedCount++;
+          console.log(`🗑️ Producto eliminado: ${product.name} (${product.sku})`);
+          continue;
+        }
+        
+        // Si está activo, guardarlo o actualizarlo
       await db.runAsync(
         `INSERT OR REPLACE INTO products 
          (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, isActive,
@@ -140,7 +154,10 @@ export async function syncCatalog(
       }
     }
     
-    console.log(`✅ ${savedCount}/${response.products.length} productos guardados en SQLite`);
+    console.log(`✅ Sincronización completada:`);
+    console.log(`   - ${savedCount} productos guardados/actualizados`);
+    console.log(`   - ${deletedCount} productos eliminados`);
+    console.log(`   - Total procesados: ${response.products.length}`);
     
     // Verificar que se guardaron
     const verifyCount = await db.getAllAsync('SELECT COUNT(*) as count FROM products');
@@ -354,9 +371,10 @@ export async function syncPendingOrders(
     onProgress?.('Obteniendo pedidos pendientes...');
     const db = getDatabase();
     
-    // Obtener pedidos pendientes (no sincronizados)
+    // Obtener pedidos pendientes (no sincronizados y con status='pending')
+    // ✅ Excluir borradores (status='draft') de la sincronización automática
     const pendingOrders = await db.getAllAsync<PendingOrder>(
-      'SELECT * FROM pending_orders WHERE synced = 0'
+      "SELECT * FROM pending_orders WHERE synced = 0 AND status = 'pending'"
     );
 
     if (pendingOrders.length === 0) {
