@@ -596,8 +596,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-}); fontWeight: '600',
-  },
   listContainer: {
     padding: 16,
   },
