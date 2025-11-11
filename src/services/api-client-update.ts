@@ -107,3 +107,65 @@ export async function updateClientOnServer(
     throw error;
   }
 }
+
+/**
+ * Crea un nuevo cliente en el servidor
+ */
+export async function createClientOnServer(
+  token: string,
+  clientData: {
+    clientNumber: string;
+    companyName: string;
+    contactPerson: string;
+    email?: string;
+    phone: string;
+    address?: string;
+    gpsLocation?: string;
+    companyTaxId?: string;
+    priceType?: 'ciudad' | 'interior' | 'especial';
+  }
+): Promise<{ success: boolean; message: string; clientId?: string }> {
+  try {
+    console.log('[createClientOnServer] Creando cliente:', clientData);
+
+    // Usar el formato correcto de tRPC batch con json wrapper
+    const response = await fetch(`${TRPC_BASE_URL}/sync.createClient?batch=1`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        "0": {
+          json: clientData
+        }
+      }),
+    });
+
+    console.log('[createClientOnServer] Response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[createClientOnServer] HTTP Error:', response.status, errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('[createClientOnServer] Respuesta raw:', JSON.stringify(data).substring(0, 300));
+
+    // Usar la función de parseo
+    const result = parseTRPCResponse(data);
+    console.log('[createClientOnServer] Respuesta parseada:', result);
+
+    return {
+      success: result.success !== undefined ? result.success : true,
+      message: result.message || 'Cliente creado exitosamente',
+      clientId: result.clientId || result.id,
+    };
+  } catch (error: any) {
+    console.error('[createClientOnServer] Error:', error);
+    console.error('[createClientOnServer] Error message:', error.message);
+    console.error('[createClientOnServer] Error stack:', error.stack);
+    throw error;
+  }
+}

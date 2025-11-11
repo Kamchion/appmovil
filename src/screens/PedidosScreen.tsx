@@ -182,7 +182,48 @@ export default function PedidosScreen({ navigation }: any) {
         ]
       );
 
-      Alert.alert('Éxito', 'Cliente creado exitosamente');
+      // Intentar sincronizar inmediatamente con el servidor
+      try {
+        const { createClientOnServer } = require('../services/api-client-update');
+        const token = await AsyncStorage.getItem('vendor_token');
+        
+        if (!token) {
+          console.warn('⚠️ No hay token de vendedor, se sincronizará después');
+          Alert.alert('Éxito', 'Cliente creado localmente. Se sincronizará automáticamente.');
+        } else {
+          console.log('🔄 Sincronizando nuevo cliente con servidor...');
+          
+          const result = await createClientOnServer(token, {
+            clientNumber: newClientData.clientNumber,
+            companyName: newClientData.companyName,
+            contactPerson: newClientData.contactPerson,
+            email: newClientData.email || '',
+            phone: newClientData.phone,
+            address: newClientData.address || '',
+            companyTaxId: newClientData.companyTaxId || '',
+            gpsLocation: newClientData.gpsLocation || '',
+            priceType: newClientData.priceType,
+          });
+          
+          console.log('📡 Respuesta del servidor:', result);
+          
+          // Marcar como sincronizado
+          await db.runAsync(
+            `UPDATE clients SET needsSync = 0 WHERE id = ?`,
+            [newId]
+          );
+          
+          console.log('✅ Cliente sincronizado con servidor exitosamente');
+          Alert.alert('Éxito', 'Cliente creado y sincronizado con el servidor');
+        }
+      } catch (syncError: any) {
+        console.error('❌ Error al sincronizar con servidor:', syncError);
+        Alert.alert(
+          '⚠️ Advertencia',
+          `Cliente creado localmente, pero no se pudo sincronizar con el servidor.\n\nError: ${syncError.message}\n\nSe sincronizará automáticamente en la próxima sincronización.`,
+          [{ text: 'OK' }]
+        );
+      }
       
       // Resetear formulario
       setNewClientData({
