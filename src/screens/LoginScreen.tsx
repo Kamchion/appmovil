@@ -155,7 +155,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <Image
           source={require('../../assets/icon.png')}
           style={styles.logo}
-          resizeMode="contain"
+          resizeMode="cover"
         />
       </View>
 
@@ -216,6 +216,8 @@ const styles = StyleSheet.create({
     width: '75%',
     height: undefined,
     aspectRatio: 1,
+    borderRadius: 20,  // ✅ Bordes redondeados
+    overflow: 'hidden',  // ✅ Ocultar contenido que sobresale
   },
   card: {
     backgroundColor: '#fff',
