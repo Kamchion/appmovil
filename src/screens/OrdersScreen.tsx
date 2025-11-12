@@ -413,6 +413,17 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
             {orders.length} pedidos • {pendingCount} pendientes
           </Text>
         </View>
+        {pendingCount > 0 && (
+          <TouchableOpacity
+            style={styles.syncButton}
+            onPress={handleSync}
+            disabled={refreshing}
+          >
+            <Text style={styles.syncButtonText}>
+              {refreshing ? '⏳' : '🔄'} Sincronizar
+            </Text>
+          </TouchableOpacity>
+        )}
         <View style={[styles.statusIndicator, isOnline ? styles.online : styles.offline]}>
           <Text style={styles.statusIndicatorText}>
             {isOnline ? '🌐' : '📱'}
@@ -497,6 +508,18 @@ const styles = StyleSheet.create({
   },
   statusIndicatorText: {
     fontSize: 20,
+  },
+  syncButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   syncBanner: {
     backgroundColor: '#fef3c7',
