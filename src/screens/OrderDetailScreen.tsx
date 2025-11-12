@@ -468,7 +468,7 @@ export default function OrderDetailScreen() {
       </View>
 
       {/* Botones de acción para pedidos pendientes */}
-      {isPending && (
+      {isPending && orderDetail.status === 'draft' && (
         <View style={styles.actionsSection}>
           <TouchableOpacity 
             style={[styles.actionButton, styles.continueButton]}
