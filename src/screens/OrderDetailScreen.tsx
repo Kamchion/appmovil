@@ -182,7 +182,7 @@ export default function OrderDetailScreen() {
       }
 
       // 6. Guardar los items en AsyncStorage como carrito
-      await AsyncStorage.setItem('@cart', JSON.stringify(cartItems));
+      await AsyncStorage.setItem('shopping_cart', JSON.stringify(cartItems));
 
       // 7. Guardar el orderId para que el catálogo sepa que está editando un pedido existente
       await AsyncStorage.setItem('editingOrderId', orderId);
