@@ -123,9 +123,11 @@ export default function OrderDetailScreen() {
         items,
       });
       setIsPending(foundInPending);
-    } catch (error) {
-      console.error('Error cargando detalles del pedido:', error);
-      Alert.alert('Error', 'No se pudieron cargar los detalles del pedido');
+    } catch (error: any) {
+      console.error('❌ Error cargando detalles del pedido:', error);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error stack:', error?.stack);
+      Alert.alert('Error', `No se pudieron cargar los detalles del pedido: ${error?.message || 'Error desconocido'}');
     } finally {
       setLoading(false);
     }
