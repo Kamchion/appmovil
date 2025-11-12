@@ -612,13 +612,13 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     flexDirection: 'row',
-    gap: 12,
   },
   itemImageContainer: {
     width: 80,
     height: 80,
     borderRadius: 8,
     overflow: 'hidden',
+    marginRight: 12,
   },
   itemImage: {
     width: '100%',
