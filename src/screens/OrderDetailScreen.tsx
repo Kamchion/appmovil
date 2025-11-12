@@ -123,11 +123,9 @@ export default function OrderDetailScreen() {
         items,
       });
       setIsPending(foundInPending);
-    } catch (error: any) {
-      console.error('❌ Error cargando detalles del pedido:', error);
-      console.error('❌ Error message:', error?.message);
-      console.error('❌ Error stack:', error?.stack);
-      Alert.alert('Error', `No se pudieron cargar los detalles del pedido: ${error?.message || 'Error desconocido'}');
+    } catch (error) {
+      console.error('Error cargando detalles del pedido:', error);
+      Alert.alert('Error', 'No se pudieron cargar los detalles del pedido');
     } finally {
       setLoading(false);
     }
@@ -433,22 +431,11 @@ export default function OrderDetailScreen() {
         {orderDetail.items.map((item, index) => (
           <View key={index} style={styles.itemCard}>
             <View style={styles.itemRow}>
-              {/* Imagen del producto */}
-              <View style={styles.itemImageContainer}>
-                {item.productImage ? (
-                  <Image 
-                    source={{ uri: item.productImage }} 
-                    style={styles.itemImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.itemImagePlaceholder}>
-                    <Text style={styles.placeholderText}>📦</Text>
-                  </View>
-                )}
-              </View>
-              
-              {/* Información del producto */}
+              {item.productImage ? (
+                <Image source={{ uri: item.productImage }} style={styles.itemImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.itemImagePlaceholder}><Text style={styles.placeholderText}>📦</Text></View>
+              )}
               <View style={styles.itemInfo}>
                 <View style={styles.itemHeader}>
                   <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
@@ -615,23 +602,20 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
   },
-  itemImageContainer: {
+  itemImage: {
     width: 80,
     height: 80,
     borderRadius: 8,
-    overflow: 'hidden',
     marginRight: 12,
   },
-  itemImage: {
-    width: '100%',
-    height: '100%',
-  },
   itemImagePlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: 80,
+    height: 80,
+    borderRadius: 8,
     backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
   placeholderText: {
     fontSize: 32,
