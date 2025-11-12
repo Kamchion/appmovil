@@ -357,8 +357,8 @@ export default function OrderDetailScreen() {
           onPress: async () => {
             try {
               const db = getDatabase();
-              await db.execAsync('DELETE FROM pending_orders WHERE id = ?', [orderId]);
-              await db.execAsync('DELETE FROM pending_order_items WHERE orderId = ?', [orderId]);
+              await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [orderId]);
+              await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [orderId]);
               Alert.alert('Éxito', 'Pedido eliminado correctamente');
               navigation.goBack();
             } catch (error) {
