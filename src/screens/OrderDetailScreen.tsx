@@ -312,16 +312,21 @@ export default function OrderDetailScreen() {
                 navigation.goBack();
 
               } catch (apiError: any) {
-                // 8. Si falla, actualizar status a 'pending' para sincronizar después
-                console.log('⚠️ Error al enviar, marcando como pendiente...');
+                // 8. Si falla, mostrar el error real
+                console.error('❌ Error al enviar pedido:', apiError);
+                console.error('Error message:', apiError.message);
+                console.error('Error stack:', apiError.stack);
+                
+                // Actualizar status a 'pending' para sincronizar después
                 await db.runAsync(
                   "UPDATE pending_orders SET status = 'pending' WHERE id = ?",
                   [orderId]
                 );
 
+                // Mostrar el error real al usuario
                 Alert.alert(
-                  '⚠️ Sin conexión',
-                  'El pedido se guardará como pendiente y se enviará automáticamente cuando haya conexión.'
+                  '❌ Error al enviar',
+                  `No se pudo enviar el pedido: ${apiError.message || 'Error desconocido'}\n\nEl pedido se guardará como pendiente.`
                 );
                 navigation.goBack();
               }
