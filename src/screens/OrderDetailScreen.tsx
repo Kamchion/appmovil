@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { getDatabase } from '../database/db';
@@ -15,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface OrderItem {
   productName: string;
   productSku: string;
+  productImage?: string;
   quantity: number;
   price: number;
   subtotal: number;
@@ -82,7 +84,7 @@ export default function OrderDetailScreen() {
       // Obtener items del pedido con JOIN a productos
       console.log('🔍 Buscando items en', itemsTableName, '...');
       const itemsRaw = await db.getAllAsync<any>(
-        `SELECT items.*, p.name as productName, p.sku as productSku 
+        `SELECT items.*, p.name as productName, p.sku as productSku, p.imageUrl as productImage 
          FROM ${itemsTableName} items 
          LEFT JOIN products p ON items.productId = p.id 
          WHERE items.orderId = ?`,
@@ -96,6 +98,7 @@ export default function OrderDetailScreen() {
       const items: OrderItem[] = itemsRaw.map(item => ({
         productName: item.productName || 'Producto',
         productSku: item.productSku || item.sku || 'N/A',
+        productImage: item.productImage,
         quantity: item.quantity,
         price: parseFloat(item.pricePerUnit || item.price || '0'),
         subtotal: item.quantity * parseFloat(item.pricePerUnit || item.price || '0'),
@@ -427,14 +430,34 @@ export default function OrderDetailScreen() {
         <Text style={styles.sectionTitle}>Productos ({orderDetail.items.length})</Text>
         {orderDetail.items.map((item, index) => (
           <View key={index} style={styles.itemCard}>
-            <View style={styles.itemHeader}>
-              <Text style={styles.itemName}>{item.productName}</Text>
-              <Text style={styles.itemSubtotal}>${item.subtotal.toFixed(2)}</Text>
-            </View>
-            <Text style={styles.itemSku}>SKU: {item.productSku}</Text>
-            <View style={styles.itemFooter}>
-              <Text style={styles.itemQuantity}>Cantidad: {item.quantity}</Text>
-              <Text style={styles.itemPrice}>Precio: ${item.price.toFixed(2)}</Text>
+            <View style={styles.itemRow}>
+              {/* Imagen del producto */}
+              <View style={styles.itemImageContainer}>
+                {item.productImage ? (
+                  <Image 
+                    source={{ uri: item.productImage }} 
+                    style={styles.itemImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.itemImagePlaceholder}>
+                    <Text style={styles.placeholderText}>📦</Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Información del producto */}
+              <View style={styles.itemInfo}>
+                <View style={styles.itemHeader}>
+                  <Text style={styles.itemName} numberOfLines={2}>{item.productName}</Text>
+                  <Text style={styles.itemSubtotal}>${item.subtotal.toFixed(2)}</Text>
+                </View>
+                <Text style={styles.itemSku}>SKU: {item.productSku}</Text>
+                <View style={styles.itemFooter}>
+                  <Text style={styles.itemQuantity}>Cantidad: {item.quantity}</Text>
+                  <Text style={styles.itemPrice}>Precio: ${item.price.toFixed(2)}</Text>
+                </View>
+              </View>
             </View>
           </View>
         ))}
@@ -586,6 +609,33 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  itemImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  itemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  itemImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 32,
+  },
+  itemInfo: {
+    flex: 1,
   },
   itemHeader: {
     flexDirection: 'row',
