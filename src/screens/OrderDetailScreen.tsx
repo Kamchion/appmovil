@@ -174,8 +174,12 @@ export default function OrderDetailScreen() {
         );
         
         if (product) {
+          // Usar el precio que se guardó en el pedido (pricePerUnit)
           cartItems.push({
-            product: product,
+            product: {
+              ...product,
+              price: item.pricePerUnit, // Usar el precio del pedido, no el actual del producto
+            },
             quantity: item.quantity,
           });
         }
