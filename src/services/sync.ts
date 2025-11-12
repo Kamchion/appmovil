@@ -375,6 +375,9 @@ export async function syncPendingOrders(
       "SELECT * FROM pending_orders WHERE synced = 0 AND status = 'pending'"
     );
 
+    console.log(`📊 syncPendingOrders: Encontrados ${pendingOrders.length} pedidos pendientes`);
+    console.log('📋 Pedidos:', pendingOrders.map(o => ({ id: o.id, status: o.status, synced: o.synced })));
+
     if (pendingOrders.length === 0) {
       return {
         success: true,
@@ -407,7 +410,9 @@ export async function syncPendingOrders(
     );
 
     // Subir pedidos al servidor
+    console.log('📤 Enviando pedidos al servidor:', ordersToUpload.length);
     const response = await uploadPendingOrders(ordersToUpload);
+    console.log('📥 Respuesta del servidor:', response);
 
     if (!response.success) {
       throw new Error('Error al subir pedidos');
@@ -489,7 +494,8 @@ export async function syncPendingOrders(
       ordersSynced: response.uploaded,
     };
   } catch (error: any) {
-    console.error('Error en syncPendingOrders:', error);
+    console.error('❌ Error en syncPendingOrders:', error);
+    console.error('Stack:', error.stack);
     return {
       success: false,
       message: error.message || 'Error desconocido',
