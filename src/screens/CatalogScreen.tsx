@@ -464,13 +464,12 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                   const maxStock = item.stock || 999;
                   const validValue = Math.max(0, Math.min(numValue, maxStock));
                   setQuantity(validValue);
-                  
-                  // Auto-agregar al carrito silenciosamente con la cantidad escrita
-                  setTimeout(() => {
-                    if (validValue > 0) {
-                      handleAddToCart(validValue);
-                    }
-                  }, 500);
+                }}
+                onEndEditing={() => {
+                  // Auto-agregar al carrito cuando termina de escribir
+                  if (quantity > 0) {
+                    handleAddToCart(quantity);
+                  }
                 }}
                 keyboardType="numeric"
                 placeholder="0"
@@ -1394,6 +1393,7 @@ const styles = StyleSheet.create({
   },
   productActions: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 8,
     marginTop: 4,
   },
