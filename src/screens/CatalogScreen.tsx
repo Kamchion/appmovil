@@ -19,7 +19,7 @@ import { syncCatalog, checkConnection } from '../services/sync';
 import { getCachedImagePath } from '../services/imageCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { addToCart } from '../services/cart';
+import { addToCart, removeFromCart } from '../services/cart';
 
 // Función para calcular número de columnas según tamaño de pantalla
 const getNumColumns = () => {
@@ -261,10 +261,13 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     const newQty = quantity > minQty ? quantity - 1 : (quantity === minQty ? 0 : quantity);
     setQuantity(newQty);
     
-    // Auto-agregar al carrito silenciosamente con la nueva cantidad
+    // Auto-agregar al carrito o eliminar si llega a 0
     setTimeout(() => {
       if (newQty > 0) {
         handleAddToCart(newQty);
+      } else {
+        // Eliminar del carrito cuando la cantidad es 0
+        removeFromCart(item.id);
       }
     }, 50);
   };
@@ -466,9 +469,12 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                   setQuantity(validValue);
                 }}
                 onEndEditing={() => {
-                  // Auto-agregar al carrito cuando termina de escribir
+                  // Auto-agregar al carrito o eliminar si es 0
                   if (quantity > 0) {
                     handleAddToCart(quantity);
+                  } else {
+                    // Eliminar del carrito cuando la cantidad es 0
+                    removeFromCart(item.id);
                   }
                 }}
                 keyboardType="numeric"
