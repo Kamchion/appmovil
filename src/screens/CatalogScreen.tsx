@@ -248,12 +248,12 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     const newQty = quantity === 0 ? minQty : quantity + 1;
     setQuantity(newQty);
     
-    // Auto-agregar al carrito silenciosamente
+    // Auto-agregar al carrito silenciosamente con la nueva cantidad
     setTimeout(() => {
       if (newQty > 0) {
-        handleAddToCart();
+        handleAddToCart(newQty);
       }
-    }, 100);
+    }, 50);
   };
 
   const decrementQuantity = () => {
@@ -261,16 +261,17 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     const newQty = quantity > minQty ? quantity - 1 : (quantity === minQty ? 0 : quantity);
     setQuantity(newQty);
     
-    // Auto-agregar al carrito silenciosamente
+    // Auto-agregar al carrito silenciosamente con la nueva cantidad
     setTimeout(() => {
       if (newQty > 0) {
-        handleAddToCart();
+        handleAddToCart(newQty);
       }
-    }, 100);
+    }, 50);
   };
 
-  const handleAddToCart = async () => {
-    if (adding || quantity === 0) return;
+  const handleAddToCart = async (qty?: number) => {
+    const qtyToAdd = qty !== undefined ? qty : quantity;
+    if (adding || qtyToAdd === 0) return;
     
     setAdding(true);
     try {
@@ -279,7 +280,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
         price: displayPrice.toString(),
       };
       
-      await addToCart(productWithPrice, quantity);
+      await addToCart(productWithPrice, qtyToAdd);
       // NO resetear cantidad - mantener el valor para que el usuario vea cuánto agregó
       // setQuantity(0); // Comentado: ahora la cantidad persiste
       if (onAddToCart) onAddToCart();
@@ -464,10 +465,10 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                   const validValue = Math.max(0, Math.min(numValue, maxStock));
                   setQuantity(validValue);
                   
-                  // Auto-agregar al carrito silenciosamente
+                  // Auto-agregar al carrito silenciosamente con la cantidad escrita
                   setTimeout(() => {
                     if (validValue > 0) {
-                      handleAddToCart();
+                      handleAddToCart(validValue);
                     }
                   }, 500);
                 }}
@@ -1397,10 +1398,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   quantityContainer: {
-    flex: 0.72,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     backgroundColor: '#f3f4f6',
     borderRadius: 6,
     paddingHorizontal: 8,
