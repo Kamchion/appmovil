@@ -249,6 +249,9 @@ export async function initDatabase(): Promise<void> {
       ['db_version', DB_VERSION.toString()]
     );
 
+    // Inicializar estilos por defecto si no existen
+    await initializeDefaultStyles(db);
+
     console.log('✅ Base de datos inicializada correctamente (versión ' + DB_VERSION + ')');
   } catch (error) {
     console.error('❌ Error al inicializar base de datos:', error);
@@ -841,5 +844,98 @@ export async function getCardStyles(): Promise<any> {
       imageSpacing: 16,
       fieldSpacing: 4,
     };
+  }
+}
+
+
+/**
+ * Inicializa los estilos por defecto en la base de datos local
+ * Simula que el servidor envió esta configuración
+ */
+async function initializeDefaultStyles(database: SQLite.SQLiteDatabase): Promise<void> {
+  try {
+    // Verificar si ya existen estilos
+    const existingFields = await database.getAllAsync<any>(
+      'SELECT COUNT(*) as count FROM product_fields'
+    );
+    
+    if (existingFields[0].count > 0) {
+      console.log('✅ Estilos ya inicializados, omitiendo...');
+      return;
+    }
+    
+    console.log('🎨 Inicializando estilos por defecto...');
+    
+    // Configuración de campos por defecto
+    const defaultFields = [
+      {
+        field: 'name',
+        label: 'Nombre',
+        enabled: 1,
+        order: 1,
+        displayType: 'multiline',
+        column: 'full',
+        textColor: '#1e293b',
+        fontSize: '10',
+        fontWeight: '600',
+        textAlign: 'left'
+      },
+      {
+        field: 'rolePrice',
+        label: 'Precio',
+        enabled: 1,
+        order: 2,
+        displayType: 'price',
+        column: 'full',
+        textColor: '#2563eb',
+        fontSize: '14',
+        fontWeight: 'bold',
+        textAlign: 'left'
+      },
+      {
+        field: 'stock',
+        label: 'Stock',
+        enabled: 1,
+        order: 3,
+        displayType: 'number',
+        column: 'full',
+        textColor: '#6b7280',
+        fontSize: '12',
+        fontWeight: '400',
+        textAlign: 'left'
+      }
+    ];
+    
+    // Insertar campos por defecto
+    for (const field of defaultFields) {
+      await database.runAsync(
+        `INSERT INTO product_fields (field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          field.field,
+          field.label,
+          field.enabled,
+          field.order,
+          field.displayType,
+          field.column,
+          field.textColor,
+          field.fontSize,
+          field.fontWeight,
+          field.textAlign,
+          new Date().toISOString()
+        ]
+      );
+    }
+    
+    // Insertar estilos de tarjeta por defecto
+    await database.runAsync(
+      `INSERT OR REPLACE INTO card_styles (id, marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing, syncedAt)
+       VALUES (1, 6, 8, 6, 6, 16, 4, ?)`,
+      [new Date().toISOString()]
+    );
+    
+    console.log('✅ Estilos por defecto inicializados');
+  } catch (error) {
+    console.error('❌ Error al inicializar estilos por defecto:', error);
   }
 }
