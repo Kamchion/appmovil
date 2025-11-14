@@ -697,7 +697,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
             style={styles.viewOptionsButton}
             onPress={handleViewOptions}
           >
-            <Ionicons name="options" size={16} color="#2563eb" />
+            <Ionicons name="options" size={16} color="#ffffff" />
             <Text style={styles.viewOptionsButtonText}>Ver opciones</Text>
           </TouchableOpacity>
         ) : (
@@ -1401,6 +1401,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     zIndex: 1000,
+    overflow: 'hidden',
     maxHeight: 300,
   },
   categoryDropdownItem: {
@@ -1657,7 +1658,7 @@ const styles = StyleSheet.create({
   },
   viewOptionsButton: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#2563eb',
     borderWidth: 2,
     borderColor: '#2563eb',
     borderRadius: 6,
@@ -1667,7 +1668,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   viewOptionsButtonText: {
-    color: '#2563eb',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,

@@ -172,8 +172,9 @@ export default function App() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Importar AsyncStorage
+              // Importar AsyncStorage y FileSystem
               const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              const FileSystem = (await import('expo-file-system')).default;
               
               // 1. Borrar todos los datos de la base de datos
               const { getDatabase } = await import('./src/database/db');
@@ -185,16 +186,24 @@ export default function App() {
               await db.execAsync('DELETE FROM products');
               await db.execAsync('DELETE FROM clients');
               
-              // 2. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
+              // 2. Borrar todas las imágenes descargadas
+              const imageDir = `${FileSystem.documentDirectory}product_images/`;
+              const dirInfo = await FileSystem.getInfoAsync(imageDir);
+              if (dirInfo.exists) {
+                await FileSystem.deleteAsync(imageDir, { idempotent: true });
+                console.log('✅ Directorio de imágenes eliminado');
+              }
+              
+              // 3. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
               await AsyncStorage.removeItem('last_sync_timestamp');
               
-              // 3. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
+              // 4. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
               await AsyncStorage.removeItem('@cart');
               await AsyncStorage.removeItem('selectedClientId');
               await AsyncStorage.removeItem('selectedClientData');
               await AsyncStorage.removeItem('editingOrderId');
               
-              console.log('✅ Todos los datos han sido eliminados, incluyendo timestamps de sincronización');
+              console.log('✅ Todos los datos han sido eliminados, incluyendo imágenes y timestamps de sincronización');
               Alert.alert('Éxito', 'Todos los datos han sido eliminados. La app está como recién instalada.');
             } catch (error) {
               console.error('Error al borrar datos:', error);
@@ -207,6 +216,7 @@ export default function App() {
   };
 
   const handleExitApp = () => {
+    setMenuVisible(false);
     Alert.alert(
       'Salir',
       '¿Desea salir de la aplicación?',
