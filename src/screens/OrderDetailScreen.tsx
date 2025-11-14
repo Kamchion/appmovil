@@ -62,11 +62,21 @@ export default function OrderDetailScreen() {
       
       // Si no está en pending_orders, buscar en order_history
       if (!order) {
-        console.log('🔍 No encontrado en pending_orders, buscando en order_history...');
+        console.log('🔍 No encontrado en pending_orders, buscando en order_history por ID...');
         order = await db.getFirstAsync<any>(
           'SELECT * FROM order_history WHERE id = ?',
           [orderId]
         );
+        
+        // Si tampoco se encuentra por ID, buscar por orderNumber
+        if (!order) {
+          console.log('🔍 No encontrado por ID, buscando por orderNumber...');
+          order = await db.getFirstAsync<any>(
+            'SELECT * FROM order_history WHERE orderNumber = ?',
+            [orderId]
+          );
+        }
+        
         itemsTableName = 'order_history_items';
       }
 
@@ -80,13 +90,15 @@ export default function OrderDetailScreen() {
       }
 
       // Obtener items del pedido con JOIN a productos
-      console.log('🔍 Buscando items en', itemsTableName, '...');
+      // Usar el ID del pedido encontrado, no el orderId original
+      const actualOrderId = order.id;
+      console.log('🔍 Buscando items en', itemsTableName, 'para orderId:', actualOrderId, '...');
       const itemsRaw = await db.getAllAsync<any>(
         `SELECT items.*, p.name as productName, p.sku as productSku 
          FROM ${itemsTableName} items 
          LEFT JOIN products p ON items.productId = p.id 
          WHERE items.orderId = ?`,
-        [orderId]
+        [actualOrderId]
       );
 
       console.log('📦 Items encontrados:', itemsRaw.length);
