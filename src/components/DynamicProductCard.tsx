@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 150,
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 2,
   },
   productImagePlaceholder: {
     width: '100%',
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 2,
   },
   productInfo: {
     marginBottom: 8,
