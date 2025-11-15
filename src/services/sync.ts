@@ -491,8 +491,8 @@ export async function syncPendingOrders(
           for (const item of items) {
             await db.runAsync(
               `INSERT INTO order_history_items (
-                orderId, productId, productName, quantity, pricePerUnit, subtotal
-              ) VALUES (?, ?, ?, ?, ?, ?)`,
+                orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newHistoryId, // Usar el nuevo ID de order_history
                 item.productId,
@@ -500,6 +500,8 @@ export async function syncPendingOrders(
                 item.quantity,
                 item.pricePerUnit,
                 item.subtotal,
+                item.customText || null,
+                item.customSelect || null,
               ]
             );
           }
@@ -625,8 +627,8 @@ export async function syncSingleOrder(
     for (const item of items) {
       await db.runAsync(
         `INSERT INTO order_history_items (
-          id, orderId, productId, sku, quantity, pricePerUnit, price
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          id, orderId, productId, sku, quantity, pricePerUnit, price, customText, customSelect
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.id,
           item.orderId,
@@ -635,6 +637,8 @@ export async function syncSingleOrder(
           item.quantity,
           item.pricePerUnit,
           item.price,
+          item.customText || null,
+          item.customSelect || null,
         ]
       );
     }

@@ -22,6 +22,7 @@ import {
   calculateCartTotal,
 } from '../services/cart';
 import { getCachedImagePath } from '../services/imageCache';
+import { getProductPrice, type PriceType } from '../utils/priceUtils';
 
 interface CartScreenProps {
   navigation: any;
@@ -249,9 +250,14 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 // Insertar items actualizados
                 for (const item of cart) {
                   const itemId = `${orderId}-${item.product.id}`;
+                  // Calcular precio correcto según tipo de cliente
+                  const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                  const correctPrice = getProductPrice(item.product, priceType);
+                  const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
+                  
                   await db.runAsync(
                     `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString(), item.customText || null, item.customSelect || null]
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
                   );
                 }
               } else {
@@ -268,9 +274,14 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 // Guardar items del pedido
                 for (const item of cart) {
                   const itemId = `${orderId}-${item.product.id}`;
+                  // Calcular precio correcto según tipo de cliente
+                  const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                  const correctPrice = getProductPrice(item.product, priceType);
+                  const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
+                  
                   await db.runAsync(
                     `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString(), item.customText || null, item.customSelect || null]
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
                   );
                 }
               }

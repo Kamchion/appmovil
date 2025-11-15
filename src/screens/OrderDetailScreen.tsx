@@ -264,6 +264,8 @@ export default function OrderDetailScreen() {
                       price: item.pricePerUnit
                     },
                     quantity: item.quantity,
+                    customText: item.customText || undefined,
+                    customSelect: item.customSelect || undefined,
                   });
                 }
               }
@@ -306,8 +308,8 @@ export default function OrderDetailScreen() {
                 for (const item of items) {
                   await db.runAsync(
                     `INSERT INTO order_history_items (
-                      id, orderId, productId, productName, quantity, pricePerUnit, subtotal
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                      id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                       item.id,
                       item.orderId,
@@ -316,6 +318,8 @@ export default function OrderDetailScreen() {
                       item.quantity,
                       item.pricePerUnit,
                       item.subtotal,
+                      item.customText || null,
+                      item.customSelect || null,
                     ]
                   );
                 }
