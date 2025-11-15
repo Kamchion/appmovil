@@ -137,17 +137,17 @@ export async function getCachedImagePath(imageUrl: string | null): Promise<strin
   try {
     const index = await getCacheIndex();
     
-    if (index[imageUrl]) {
-      const fileInfo = await FileSystem.getInfoAsync(index[imageUrl].localPath);
-      if (fileInfo.exists) {
-        return index[imageUrl].localPath;
-      }
+    // Si está en el índice, confiar en que existe
+    // No verificar con getInfoAsync para evitar errores en offline
+    if (index[imageUrl] && index[imageUrl].localPath) {
+      return index[imageUrl].localPath;
     }
 
     // Si no está cacheada, retornar URL original
     return imageUrl;
   } catch (error) {
     console.error('Error al obtener imagen cacheada:', error);
+    // En caso de error, retornar URL original como fallback
     return imageUrl;
   }
 }
