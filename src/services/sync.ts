@@ -395,7 +395,10 @@ export async function syncPendingOrders(
     );
 
     console.log(`📊 syncPendingOrders: Encontrados ${pendingOrders.length} pedidos pendientes`);
-    console.log('📋 Pedidos:', pendingOrders.map(o => ({ id: o.id, status: o.status, synced: o.synced })));
+    console.log('📋 Pedidos encontrados:');
+    pendingOrders.forEach((o, idx) => {
+      console.log(`  ${idx + 1}. ID: ${o.id}, Status: ${o.status}, Synced: ${o.synced}, CreatedAt: ${o.createdAt}`);
+    });
 
     if (pendingOrders.length === 0) {
       return {
@@ -432,6 +435,16 @@ export async function syncPendingOrders(
 
     // Subir pedidos al servidor
     console.log('📤 Enviando pedidos al servidor:', ordersToUpload.length);
+    console.log('📝 Detalle de pedidos a enviar:');
+    ordersToUpload.forEach((order, index) => {
+      console.log(`  Pedido ${index + 1}:`, {
+        clientId: order.clientId,
+        createdAtOffline: order.createdAtOffline,
+        itemsCount: order.items.length,
+        firstItemId: order.items[0]?.productId
+      });
+    });
+    
     const response = await uploadPendingOrders(ordersToUpload);
     console.log('📥 Respuesta del servidor:', response);
 
