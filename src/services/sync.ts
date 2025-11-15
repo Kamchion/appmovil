@@ -441,8 +441,8 @@ export async function syncPendingOrders(
             productId: item.productId,
             quantity: item.quantity,
             pricePerUnit: item.pricePerUnit,
-            customText: item.customText,
-            customSelect: item.customSelect,
+            customText: item.customText || undefined,
+            customSelect: item.customSelect || undefined,
           })),
           createdAtOffline: order.createdAt,
         };
