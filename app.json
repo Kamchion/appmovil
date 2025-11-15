@@ -2,7 +2,7 @@
   "expo": {
     "name": "IMPORKAM",
     "slug": "imporkam-vendedores",
-    "version": "2.6.7",
+    "version": "2.6.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +28,7 @@
         "android.permission.READ_EXTERNAL_STORAGE"
       ],
       "edgeToEdgeEnabled": true,
-      "versionCode": 367
+      "versionCode": 368
     },
     "web": {
       "favicon": "./assets/favicon.png"
