@@ -164,15 +164,18 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   // Calcular precio según tipo de cliente usando la utilidad
   const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
 
+  // Cargar imagen solo cuando cambia
   useEffect(() => {
     if (item?.image) {
       getCachedImagePath(item.image).then(setImagePath).catch(() => setImagePath(null));
     }
-    // Verificar si tiene variantes
+  }, [item?.image]);
+
+  // Cargar variantes y configuración solo una vez al montar
+  useEffect(() => {
     checkHasVariants();
-    // Cargar configuración de campos
     loadProductFieldsConfig();
-  }, [item?.image, item?.sku]);
+  }, []);  // Sin dependencias = solo se ejecuta una vez
 
   const loadProductFieldsConfig = async () => {
     try {
