@@ -761,12 +761,6 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [isOnline, setIsOnline] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  
-  // Estados para lazy loading
-  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const PRODUCTS_PER_LOAD = 100;
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
@@ -861,7 +855,6 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         );
         setProducts([]);
         setFilteredProducts([]);
-        setDisplayedProducts([]);
         return;
       }
       
@@ -897,10 +890,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
       setProducts(validProducts);
       setFilteredProducts(validProducts);
       
-      // LAZY LOADING: Cargar solo los primeros 100 productos para display inicial
-      setDisplayedProducts(validProducts.slice(0, PRODUCTS_PER_LOAD));
-      setOffset(PRODUCTS_PER_LOAD);
-      console.log(`🎯 Mostrando primeros ${Math.min(PRODUCTS_PER_LOAD, validProducts.length)} productos`);
+      console.log(`🎯 Cargados ${validProducts.length} productos`);
       
       // Extraer categorías únicas
       const uniqueCategories = [...new Set(result.map(p => p.category).filter(c => c))].sort();
@@ -913,28 +903,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     }
   };
 
-  const loadMoreProducts = () => {
-    if (loadingMore) return;
-    
-    const currentFiltered = filteredProducts;
-    const currentDisplayed = displayedProducts.length;
-    
-    if (currentDisplayed >= currentFiltered.length) {
-      // Ya se mostraron todos los productos
-      return;
-    }
-    
-    setLoadingMore(true);
-    
-    // Cargar los siguientes 100 productos
-    const nextBatch = currentFiltered.slice(currentDisplayed, currentDisplayed + PRODUCTS_PER_LOAD);
-    setDisplayedProducts([...displayedProducts, ...nextBatch]);
-    setOffset(currentDisplayed + PRODUCTS_PER_LOAD);
-    
-    console.log(`📄 Cargados ${nextBatch.length} productos más (Total mostrados: ${currentDisplayed + nextBatch.length}/${currentFiltered.length})`);
-    
-    setLoadingMore(false);
-  };
+
 
   const filterProducts = () => {
     let filtered = [...products];
@@ -956,10 +925,6 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     }
 
     setFilteredProducts(filtered);
-    
-    // Resetear lazy loading cuando se filtra
-    setDisplayedProducts(filtered.slice(0, PRODUCTS_PER_LOAD));
-    setOffset(PRODUCTS_PER_LOAD);
   };
 
   const handleSync = async () => {
@@ -1171,28 +1136,18 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
       {/* Product List */}
       <FlatList
-        data={displayedProducts}
+        data={filteredProducts}
         renderItem={renderProduct}
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
         key={numColumns}
         columnWrapperStyle={styles.productRow}
         contentContainerStyle={styles.productList}
-        onEndReached={loadMoreProducts}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <ActivityIndicator size="small" color="#2563eb" />
-              <Text style={{ marginTop: 8, color: '#64748b' }}>Cargando más productos...</Text>
-            </View>
-          ) : null
-        }
         removeClippedSubviews={true}
-        maxToRenderPerBatch={20}
+        maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={50}
-        initialNumToRender={20}
-        windowSize={10}
+        initialNumToRender={10}
+        windowSize={5}
         // refreshControl desactivado - usar botón de sincronización en panel
         // refreshControl={
         //   <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
