@@ -6,6 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * Descarga y almacena imágenes localmente para uso offline
  */
 
+// Verificar que documentDirectory esté disponible
+if (!FileSystem.documentDirectory) {
+  console.error('❌ FileSystem.documentDirectory es undefined');
+  throw new Error('FileSystem.documentDirectory no está disponible');
+}
+
 const IMAGE_CACHE_DIR = `${FileSystem.documentDirectory}images/`;
 const CACHE_INDEX_KEY = 'image_cache_index';
 
@@ -114,6 +120,9 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
     return null;
   } catch (error) {
     console.error('❌ Error al cachear imagen:', error);
+    console.error('🔍 Detalles del error:', JSON.stringify(error, null, 2));
+    console.error('📍 URL de imagen:', imageUrl);
+    console.error('📁 Directorio de caché:', IMAGE_CACHE_DIR);
     return null;
   }
 }
