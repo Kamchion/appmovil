@@ -918,10 +918,11 @@ export async function incrementalSync(
     onProgress?.('Descargando cambios en clientes...');
     
     let clientsUpdated = 0;
+    let clientChanges: any = { success: false, timestamp: null };  // ✅ Declarar fuera del try-catch
     
     try {
       const { getClientChanges } = require('./api');
-      const clientChanges = await getClientChanges(lastSync);
+      clientChanges = await getClientChanges(lastSync);  // ✅ Asignar en lugar de declarar
     
     if (clientChanges.success && clientChanges.clients) {
       for (const client of clientChanges.clients) {
