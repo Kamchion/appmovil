@@ -336,6 +336,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                   cart: cart.map(item => ({
                     product: { id: item.product.id, name: item.product.name, sku: item.product.sku, price: item.product.price },
                     quantity: item.quantity,
+                    customText: item.customText || undefined,
+                    customSelect: item.customSelect || undefined,
                   })),
                   customerNote,
                   selectedClientId: selectedClient.id.toString(),
