@@ -48,11 +48,6 @@ export default function DashboardHomeScreen() {
     setSyncMessage('Iniciando sincronización...');
 
     try {
-      // ✅ Borrar timestamp para forzar sincronización desde el inicio
-      // Esto permite detectar cambios y eliminaciones en el servidor
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem('last_sync_timestamp');
-      
       const result = await incrementalSync((message) => {
         setSyncMessage(message);
       });
