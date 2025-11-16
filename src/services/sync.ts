@@ -961,9 +961,20 @@ export async function incrementalSync(
       // Continuar aunque falle la descarga de clientes
     }
     
-    // Actualizar timestamp de última sincronización
-    const now = new Date().toISOString();
-    await AsyncStorage.setItem(LAST_SYNC_KEY, now);
+    // ✅ CORRECCIÓN CRÍTICA: Usar el timestamp del servidor, no new Date()
+    // Esto asegura que la próxima sincronización pida cambios desde el momento correcto
+    const serverTimestamp = Math.max(
+      productChanges.timestamp ? new Date(productChanges.timestamp).getTime() : 0,
+      clientChanges?.timestamp ? new Date(clientChanges.timestamp).getTime() : 0
+    );
+    
+    // Si obtuvimos un timestamp válido del servidor, usarlo; sino usar la hora actual
+    const newSyncTimestamp = serverTimestamp > 0 
+      ? new Date(serverTimestamp).toISOString()
+      : new Date().toISOString();
+    
+    await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
+    console.log('✅ Timestamp de sincronización actualizado:', newSyncTimestamp);
     
     const message = `${productsUpdated} productos, ${clientsUpdated} clientes, ${imagesDownloaded} imágenes actualizadas`;
     
