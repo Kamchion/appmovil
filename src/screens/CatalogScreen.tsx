@@ -247,7 +247,11 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
       
       // ✅ SOLO cargar variantes VISIBLES (hideInCatalog = 0)
       const result = await db.getAllAsync<Product>(
-        'SELECT * FROM products WHERE parentSku = ? AND isActive = 1 AND hideInCatalog = 0 ORDER BY displayOrder ASC, name ASC',
+        `SELECT * FROM products WHERE parentSku = ? AND isActive = 1 AND hideInCatalog = 0 
+         ORDER BY 
+           CASE WHEN displayOrder IS NULL THEN 0 ELSE 1 END,
+           displayOrder ASC, 
+           name ASC`,
         [item.sku]
       );
       
@@ -880,7 +884,10 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
            (COUNT(v.id) > 0 AND SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) > 0)
            OR (COUNT(v.id) = 0 AND p.hideInCatalog = 0)
          )
-         ORDER BY p.displayOrder ASC, p.name ASC`
+         ORDER BY 
+           CASE WHEN p.displayOrder IS NULL THEN 0 ELSE 1 END,
+           p.displayOrder ASC, 
+           p.name ASC`
       );
       
       console.log(`✅ ${result.length} productos visibles cargados`);
