@@ -115,7 +115,7 @@ export async function syncCatalog(
           location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          product.sku,  // Usar sku como id también
+          product.id,
           product.sku,
           product.name,
           product.description || null,
@@ -884,7 +884,7 @@ export async function incrementalSync(
             location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            product.sku,  // Usar sku como id también
+            product.id,
             product.sku,
             product.name,
             product.description || null,
