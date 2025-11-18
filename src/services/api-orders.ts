@@ -36,8 +36,13 @@ export async function getOrders(token: string, limit: number = 100): Promise<any
       success: false,
       orders: [],
     };
-  } catch (error) {
-    console.error('❌ Error en getOrders:', error);
-    throw error;
+  } catch (error: any) {
+    const errorMessage = error.message || error.toString() || 'Error desconocido';
+    console.error('❌ Error en getOrders:', {
+      message: errorMessage,
+      type: error.constructor?.name,
+      stack: error.stack?.substring(0, 200)
+    });
+    throw new Error(`Error al obtener pedidos: ${errorMessage}`);
   }
 }
