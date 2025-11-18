@@ -929,6 +929,47 @@ export async function incrementalSync(
       }
     }
     
+    // 3.5. Comparar lista local con servidor para detectar productos eliminados
+    onProgress?.('Verificando productos eliminados...');
+    try {
+      const { getActiveSkus } = require('./api');
+      const serverSkusResponse = await getActiveSkus();
+      
+      if (serverSkusResponse.success && serverSkusResponse.skus) {
+        // Obtener SKUs locales
+        const localProducts = await db.getAllAsync<{ sku: string }>(
+          'SELECT sku FROM products WHERE isActive = 1'
+        );
+        const localSkus = new Set(localProducts.map(p => p.sku));
+        const serverSkus = new Set(serverSkusResponse.skus);
+        
+        // Encontrar productos que están en local pero no en servidor
+        const deletedSkus = [];
+        for (const localSku of localSkus) {
+          if (!serverSkus.has(localSku)) {
+            deletedSkus.push(localSku);
+          }
+        }
+        
+        // Eliminar productos que ya no existen en el servidor
+        for (const sku of deletedSkus) {
+          await db.runAsync(
+            'UPDATE products SET isActive = 0 WHERE sku = ?',
+            [sku]
+          );
+          productsUpdated++;
+          console.log(`❌ Producto eliminado del servidor: ${sku}`);
+        }
+        
+        if (deletedSkus.length > 0) {
+          console.log(`🗑️ ${deletedSkus.length} productos eliminados detectados`);
+        }
+      }
+    } catch (error) {
+      console.warn('Error al verificar productos eliminados:', error);
+      // No fallar la sincronización si esto falla
+    }
+    
     // 4. Descargar cambios en clientes
     onProgress?.('Descargando cambios en clientes...');
     

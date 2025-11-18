@@ -276,6 +276,23 @@ export async function getChanges(
 }
 
 /**
+ * Obtiene lista de SKUs activos en el servidor
+ * Usado para detectar productos eliminados
+ */
+export async function getActiveSkus(): Promise<{
+  success: boolean;
+  skus: string[];
+}> {
+  return await trpcQuery<{
+    success: boolean;
+    skus: string[];
+  }>(
+    'sync.getActiveSkus',
+    {}
+  );
+}
+
+/**
  * Obtiene cambios incrementales en clientes
  */
 export async function getClientChanges(
