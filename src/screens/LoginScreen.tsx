@@ -199,7 +199,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         
         {/* Número de versión */}
         <Text style={styles.version}>
-          v{Constants.expoConfig?.version || '2.2.0'}
+          v{Constants.expoConfig?.version || '3.0.3'} - Desarrollado por CK
         </Text>
       </View>
     </KeyboardAvoidingView>
