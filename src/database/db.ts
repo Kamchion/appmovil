@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DB_NAME = 'vendedor_offline.db';
-const DB_VERSION = 6; // Incrementar cuando hay cambios en el esquema
+const DB_VERSION = 7; // Incrementar cuando hay cambios en el esquema
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -29,8 +29,8 @@ export async function initDatabase(): Promise<void> {
     // Crear tabla de productos (espejo de products en web)
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY,
-        sku TEXT NOT NULL,
+        id TEXT,
+        sku TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
         category TEXT,
