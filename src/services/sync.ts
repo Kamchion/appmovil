@@ -951,21 +951,37 @@ export async function incrementalSync(
         // Actualizar o insertar cliente
         await db.runAsync(
           `INSERT OR REPLACE INTO clients 
-           (id, name, email, phone, address, companyName, companyTaxId, 
-            priceType, isActive, createdAt, updatedAt, needsSync)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+           (id, name, email, role, companyName, companyTaxId, phone, address, gpsLocation,
+            city, state, zipCode, country, isActive, username, contactPerson, status,
+            agentNumber, clientNumber, priceType, assignedVendorId, createdAt, lastSignedIn,
+            syncedAt, modifiedAt, needsSync)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
           [
             client.id,
-            client.name,
-            client.email,
-            client.phone,
-            client.address,
-            client.companyName,
-            client.companyTaxId,
-            client.priceType || 'ciudad',
+            client.name || '',
+            client.email || '',
+            client.role || 'cliente',
+            client.companyName || '',
+            client.companyTaxId || '',
+            client.phone || '',
+            client.address || '',
+            client.gpsLocation || null,
+            client.city || '',
+            client.state || '',
+            client.zipCode || '',
+            client.country || '',
             client.isActive ? 1 : 0,
-            client.createdAt,
-            client.updatedAt,
+            client.username || '',
+            client.contactPerson || '',
+            client.status || 'active',
+            client.agentNumber || '',
+            client.clientNumber || '',
+            client.priceType || 'ciudad',
+            client.assignedVendorId || '',
+            client.createdAt || new Date().toISOString(),
+            client.lastSignedIn || null,
+            new Date().toISOString(),
+            client.updatedAt || new Date().toISOString(),
           ]
         );
         
