@@ -859,9 +859,19 @@ export async function incrementalSync(
     
     if (productChanges.success && productChanges.products) {
       for (const product of productChanges.products) {
-        // Si el producto está inactivo, eliminarlo (por SKU para mayor confiabilidad)
+        // Si el producto está inactivo, marcarlo como inactivo o eliminarlo
         if (!product.isActive) {
-          await db.runAsync('DELETE FROM products WHERE sku = ?', [product.sku]);
+          // Primero intentar marcar como inactivo (para productos que existen)
+          const updateResult = await db.runAsync(
+            'UPDATE products SET isActive = 0 WHERE sku = ?',
+            [product.sku]
+          );
+          
+          // Si no se actualizó ningún registro, intentar eliminar
+          if (updateResult.changes === 0) {
+            await db.runAsync('DELETE FROM products WHERE sku = ?', [product.sku]);
+          }
+          
           productsUpdated++;
           continue;
         }
