@@ -197,9 +197,9 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           {'\n\n'}💡 Después del primer login, podrás acceder sin conexión.
         </Text>
         
-        {/* Número de versión */}
+        {/* Número de versión y autor */}
         <Text style={styles.version}>
-          v{Constants.expoConfig?.version || '2.2.0'}
+          v{Constants.expoConfig?.version || '3.0.0'} | Desarrollado por CK
         </Text>
       </View>
     </KeyboardAvoidingView>
