@@ -681,16 +681,16 @@ export async function syncSingleOrder(
     for (const item of items) {
       await db.runAsync(
         `INSERT INTO order_history_items (
-          id, orderId, productId, sku, quantity, pricePerUnit, price, customText, customSelect
+          id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.id,
           item.orderId,
           item.productId,
-          item.sku,
+          item.productName || '',
           item.quantity,
           item.pricePerUnit,
-          item.price,
+          item.subtotal || (parseFloat(item.pricePerUnit) * item.quantity).toFixed(2),
           item.customText || null,
           item.customSelect || null,
         ]
@@ -879,24 +879,39 @@ export async function incrementalSync(
         // Actualizar producto
         await db.runAsync(
           `INSERT OR REPLACE INTO products 
-           (id, sku, name, description, category, image, basePrice, price, stock, 
-            isActive, minimumQuantity, hideInCatalog, parentSku, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, 
+            isActive, displayOrder, parentSku, variantName, dimension, line1Text, line2Text, minQuantity,
+            location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             product.id,
             product.sku,
             product.name,
-            product.description,
-            product.category,
-            product.image,
+            product.description || null,
+            product.category || null,
+            product.subcategory || null,
+            product.image || null,
             product.basePrice,
-            product.price,
-            product.stock,
+            product.priceCity || product.basePrice,
+            product.priceInterior || product.basePrice,
+            product.priceSpecial || product.basePrice,
+            product.stock || 0,
             product.isActive ? 1 : 0,
-            product.minimumQuantity,
-            product.hideInCatalog ? 1 : 0,
+            product.displayOrder || null,
             product.parentSku || null,
+            product.variantName || null,
+            product.dimension || null,
+            product.line1Text || null,
+            product.line2Text || null,
+            product.minQuantity || product.minimumQuantity || 1,
+            product.location || null,
+            product.unitsPerBox || 0,
+            product.hideInCatalog ? 1 : 0,
+            product.customText || null,
+            product.customSelect || null,
+            product.createdAt || null,
             product.updatedAt,
+            new Date().toISOString(),
           ]
         );
         
