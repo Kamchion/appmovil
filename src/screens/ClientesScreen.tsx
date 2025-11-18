@@ -134,6 +134,15 @@ export default function ClientesScreen() {
       Alert.alert('Error', 'El teléfono es requerido');
       return;
     }
+    
+    // Validar formato de email si se proporciona
+    if (formData.email && formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        Alert.alert('Error', 'El formato del email es inválido. Por favor, ingresa un email válido (ejemplo: usuario@dominio.com)');
+        return;
+      }
+    }
 
     setIsSaving(true);
 
@@ -236,6 +245,15 @@ export default function ClientesScreen() {
     if (!formData.companyName.trim() || !formData.contactPerson.trim() || !formData.phone.trim()) {
       Alert.alert('Error', 'Los campos marcados con * son requeridos');
       return;
+    }
+    
+    // Validar formato de email si se proporciona
+    if (formData.email && formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        Alert.alert('Error', 'El formato del email es inválido. Por favor, ingresa un email válido (ejemplo: usuario@dominio.com)');
+        return;
+      }
     }
 
     setIsSaving(true);

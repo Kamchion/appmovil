@@ -22,6 +22,7 @@ import {
   calculateCartTotal,
 } from '../services/cart';
 import { getCachedImagePath } from '../services/imageCache';
+import { getProductPrice, type PriceType } from '../utils/priceUtils';
 
 interface CartScreenProps {
   navigation: any;
@@ -102,7 +103,7 @@ const CartItemCard = ({
 
           {/* Precio y controles */}
           <View style={styles.itemFooter}>
-            <Text style={styles.itemPrice}>${item.product.price}</Text>
+            <Text style={styles.itemPrice}>{item.product.price}</Text>
             
             {/* Controles de cantidad */}
             <View style={styles.quantityControls}>
@@ -129,7 +130,7 @@ const CartItemCard = ({
             </View>
 
             {/* Subtotal del item */}
-            <Text style={styles.itemSubtotal}>${itemSubtotal.toFixed(2)}</Text>
+            <Text style={styles.itemSubtotal}>{itemSubtotal.toFixed(2)}</Text>
           </View>
         </View>
       </View>
@@ -211,7 +212,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
 
     Alert.alert(
       'Guardar Pedido',
-      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: $${total.toFixed(2)}\n\n¿Deseas guardar este pedido para continuar más tarde?`,
+      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nTotal: ${total.toFixed(2)}\n\n¿Deseas guardar este pedido para continuar más tarde?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -220,7 +221,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
             setLoading(true);
             try {
               const { getDatabase } = require('../database/db');
-              const { generateOrderNumber } = require('../utils/orderNumber');
+              const { generateSentOrderNumber } = require('../utils/orderNumber');
               const db = getDatabase();
               const now = new Date().toISOString();
 
@@ -249,14 +250,19 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 // Insertar items actualizados
                 for (const item of cart) {
                   const itemId = `${orderId}-${item.product.id}`;
+                  // Calcular precio correcto según tipo de cliente
+                  const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                  const correctPrice = getProductPrice(item.product, priceType);
+                  const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
+                  
                   await db.runAsync(
-                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
                   );
                 }
               } else {
                 // CREAR nuevo pedido
-                orderId = await generateOrderNumber();
+                orderId = await generateSentOrderNumber();
 
                 // Guardar pedido como BORRADOR en la base de datos local
                 // ✅ status = 'draft' para que NO se sincronice automáticamente
@@ -268,9 +274,14 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 // Guardar items del pedido
                 for (const item of cart) {
                   const itemId = `${orderId}-${item.product.id}`;
+                  // Calcular precio correcto según tipo de cliente
+                  const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                  const correctPrice = getProductPrice(item.product, priceType);
+                  const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
+                  
                   await db.runAsync(
-                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
                   );
                 }
               }
@@ -325,6 +336,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                   cart: cart.map(item => ({
                     product: { id: item.product.id, name: item.product.name, sku: item.product.sku, price: item.product.price },
                     quantity: item.quantity,
+                    customText: item.customText || undefined,
+                    customSelect: item.customSelect || undefined,
                   })),
                   customerNote,
                   selectedClientId: selectedClient.id.toString(),
@@ -375,8 +388,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
 
               } catch (apiError: any) {
                 console.log('⚠️ Guardando localmente...');
-                const { generateOrderNumber } = require('../utils/orderNumber');
-                const orderId = await generateOrderNumber();
+                 const { generateSentOrderNumber } = require('../utils/orderNumber');
+                const orderId = await generateSentOrderNumber();
                 const now = new Date().toISOString();
 
                 await db.runAsync(
@@ -387,8 +400,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
                 for (const item of cart) {
                   const itemId = `${orderId}-${item.product.id}`;
                   await db.runAsync(
-                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString()]
+                    `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [itemId, orderId, item.product.id, item.product.name, item.quantity, item.product.price, (parseFloat(item.product.price) * item.quantity).toString(), item.customText || null, item.customSelect || null]
                   );
                 }
 
@@ -479,19 +492,19 @@ export default function CartScreen({ navigation }: CartScreenProps) {
           
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>{subtotal.toFixed(2)}</Text>
           </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Impuestos (10%)</Text>
-            <Text style={styles.summaryValue}>${tax.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>{tax.toFixed(2)}</Text>
           </View>
 
           <View style={styles.summaryDivider} />
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryTotalLabel}>Total</Text>
-            <Text style={styles.summaryTotalValue}>${total.toFixed(2)}</Text>
+            <Text style={styles.summaryTotalValue}>{total.toFixed(2)}</Text>
           </View>
 
           {/* Notas del cliente */}

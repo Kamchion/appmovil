@@ -13,13 +13,14 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { getDatabase } from '../database/db';
 import { Product } from '../types';
 import { syncCatalog, checkConnection } from '../services/sync';
 import { getCachedImagePath } from '../services/imageCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { addToCart } from '../services/cart';
+import { addToCart, removeFromCart, updateCartItemCustomFields } from '../services/cart';
 
 // Función para calcular número de columnas según tamaño de pantalla
 const getNumColumns = () => {
@@ -109,7 +110,7 @@ const VariantItem = ({
       <View style={styles.variantInfo}>
         <Text style={styles.variantName}>{variant.variantName || variant.name}</Text>
         <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
-        <Text style={styles.variantPrice}>${displayPrice}</Text>
+        <Text style={styles.variantPrice}>{displayPrice}</Text>
         <Text style={styles.variantStock}>Stock: {variant.stock || 0}</Text>
       </View>
       <View style={styles.variantControls}>
@@ -151,17 +152,55 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   const [adding, setAdding] = useState(false);
   // Estado para cantidades de variantes (key: variantId, value: quantity)
   const [variantQuantities, setVariantQuantities] = useState<Record<string, number>>({});
+  // Estados para configuración dinámica de campos
+  const [productFields, setProductFields] = useState<any[]>([]);
+  const [cardStyles, setCardStyles] = useState<any>(null);
+  // Estados para campos personalizados
+  const [customText, setCustomText] = useState('');
+  const [customSelect, setCustomSelect] = useState('');
+  const [showCustomTextModal, setShowCustomTextModal] = useState(false);
+  const [tempCustomText, setTempCustomText] = useState('');
   
   // Calcular precio según tipo de cliente usando la utilidad
   const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
 
+  // Cargar imagen solo cuando cambia
   useEffect(() => {
     if (item?.image) {
       getCachedImagePath(item.image).then(setImagePath).catch(() => setImagePath(null));
     }
-    // Verificar si tiene variantes
+  }, [item?.image]);
+
+  // Cargar variantes y configuración solo una vez al montar
+  useEffect(() => {
     checkHasVariants();
-  }, [item?.image, item?.sku]);
+    loadProductFieldsConfig();
+  }, []);  // Sin dependencias = solo se ejecuta una vez
+
+  const loadProductFieldsConfig = async () => {
+    try {
+      const db = getDatabase();
+      const fields = await db.getAllAsync<any>(
+        `SELECT field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign, options, maxLength
+         FROM product_fields
+         WHERE enabled = 1
+         ORDER BY "order" ASC`
+      );
+      // Parsear options de JSON string a array
+      const parsedFields = fields.map(f => ({
+        ...f,
+        options: f.options ? JSON.parse(f.options) : undefined
+      }));
+      setProductFields(parsedFields);
+      
+      const styles = await db.getFirstAsync<any>(
+        'SELECT marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing FROM card_styles WHERE id = 1'
+      );
+      setCardStyles(styles);
+    } catch (error) {
+      console.error('❌ Error al cargar configuración de campos:', error);
+    }
+  };
 
   const checkHasVariants = async () => {
     try {
@@ -243,26 +282,142 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     return null;
   }
 
+  // Función para renderizar un campo dinámico
+  const renderDynamicField = (field: any, index: number) => {
+    let value: any = (item as any)[field.field];
+    
+    // Manejar campo de precio especial
+    if (field.field === 'rolePrice' || field.field === 'price') {
+      value = displayPrice;
+    }
+
+    // Manejar campos personalizados editables
+    // Nota: customText y customSelect se renderizan juntos más abajo
+    if (field.field === 'customText' || field.field === 'customSelect') {
+      return null; // No renderizar individualmente
+    }
+
+    if (!value && value !== 0) return null;
+
+    const textStyle = {
+      color: field.textColor || '#1e293b',
+      fontSize: parseInt(field.fontSize || '12'),
+      fontWeight: (field.fontWeight || '400') as any,
+      textAlign: (field.textAlign || 'left') as any,
+    };
+
+    switch (field.displayType) {
+      case 'price':
+        return (
+          <Text key={index} style={[styles.productPrice, textStyle]}>
+            {formatPrice(value)}
+          </Text>
+        );
+      
+      case 'badge':
+        return (
+          <View key={index} style={styles.badgeContainer}>
+            <Text style={[styles.badgeText, textStyle]}>
+              {value}
+            </Text>
+          </View>
+        );
+      
+      case 'number':
+        if (field.field === 'stock') {
+          return (
+            <Text key={index} style={[styles.productStock, textStyle]}>
+              Stock: {value}
+            </Text>
+          );
+        }
+        if (field.field === 'unitsPerBox') {
+          return (
+            <Text key={index} style={[styles.fieldText, textStyle]}>
+              Caja: {value}
+            </Text>
+          );
+        }
+        if (field.field === 'minQuantity') {
+          return (
+            <Text key={index} style={[styles.fieldText, textStyle]}>
+              Mín: {value}
+            </Text>
+          );
+        }
+        return (
+          <Text key={index} style={[styles.fieldText, textStyle]}>
+            {field.label}: {value}
+          </Text>
+        );
+      
+      case 'multiline':
+        return (
+          <Text key={index} style={[styles.productName, textStyle]} numberOfLines={2}>
+            {value}
+          </Text>
+        );
+      
+      default:
+        // Para campos de texto normales como name, sku, etc.
+        if (field.field === 'name') {
+          return (
+            <Text key={index} style={[styles.productName, textStyle]} numberOfLines={2}>
+              {value}
+            </Text>
+          );
+        }
+        if (field.field === 'sku') {
+          return (
+            <Text key={index} style={[styles.productSku, textStyle]}>
+              SKU: {value}
+            </Text>
+          );
+        }
+        if (field.field === 'category') {
+          return (
+            <View key={index} style={styles.productCategory}>
+              <Ionicons name="pricetag-outline" size={12} color="#64748b" />
+              <Text style={[styles.productCategoryText, textStyle]}>{value}</Text>
+            </View>
+          );
+        }
+        return <Text key={index} style={[styles.fieldText, textStyle]}>{value}</Text>;
+    }
+  };
+
   const incrementQuantity = () => {
     const minQty = item.minQuantity || 1;
-    if (quantity === 0) {
-      setQuantity(minQty);
-    } else {
-      setQuantity(prev => prev + 1);
-    }
+    const newQty = quantity === 0 ? minQty : quantity + 1;
+    setQuantity(newQty);
+    
+    // Auto-agregar al carrito silenciosamente con la nueva cantidad
+    setTimeout(() => {
+      if (newQty > 0) {
+        handleAddToCart(newQty);
+      }
+    }, 50);
   };
 
   const decrementQuantity = () => {
     const minQty = item.minQuantity || 1;
-    if (quantity > minQty) {
-      setQuantity(prev => prev - 1);
-    } else if (quantity === minQty) {
-      setQuantity(0);
-    }
+    const newQty = quantity > minQty ? quantity - 1 : (quantity === minQty ? 0 : quantity);
+    setQuantity(newQty);
+    
+    // Auto-agregar al carrito o eliminar si llega a 0
+    setTimeout(() => {
+      if (newQty > 0) {
+        handleAddToCart(newQty);
+      } else {
+        // Eliminar del carrito cuando la cantidad es 0
+        removeFromCart(item.id);
+      }
+    }, 50);
   };
 
-  const handleAddToCart = async () => {
-    if (adding || quantity === 0) return;
+  const handleAddToCart = async (qty?: number) => {
+    const qtyToAdd = qty !== undefined ? qty : quantity;
+    if (adding || qtyToAdd === 0) return;
     
     setAdding(true);
     try {
@@ -271,7 +426,16 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
         price: displayPrice.toString(),
       };
       
-      await addToCart(productWithPrice, quantity);
+      // 🐛 DEBUG: Verificar valores de customText y customSelect
+      console.log('🛒 Agregando al carrito:', {
+        productId: item.id,
+        productName: item.name,
+        quantity: qtyToAdd,
+        customText: customText,
+        customSelect: customSelect,
+      });
+      
+      await addToCart(productWithPrice, qtyToAdd, customText, customSelect);
       // NO resetear cantidad - mantener el valor para que el usuario vea cuánto agregó
       // setQuantity(0); // Comentado: ahora la cantidad persiste
       if (onAddToCart) onAddToCart();
@@ -318,6 +482,49 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+        </Modal>
+
+        {/* Modal de customText */}
+        <Modal
+          visible={showCustomTextModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowCustomTextModal(false)}
+        >
+          <View style={styles.customTextModalOverlay}>
+            <View style={styles.customTextModalContent}>
+              <Text style={styles.customTextModalTitle}>Ingresar texto</Text>
+              <TextInput
+                value={tempCustomText}
+                onChangeText={setTempCustomText}
+                placeholder="Texto"
+                maxLength={productFields.find(f => f.field === 'customText')?.maxLength || 8}
+                style={styles.customTextModalInput}
+                autoFocus={true}
+              />
+              <View style={styles.customTextModalButtons}>
+                <TouchableOpacity
+                  style={[styles.customTextModalButton, styles.customTextModalButtonCancel]}
+                  onPress={() => setShowCustomTextModal(false)}
+                >
+                  <Text style={styles.customTextModalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.customTextModalButton, styles.customTextModalButtonConfirm]}
+                  onPress={async () => {
+                    setCustomText(tempCustomText);
+                    setShowCustomTextModal(false);
+                    // Actualizar el carrito si el producto ya está agregado
+                    if (quantity > 0) {
+                      await updateCartItemCustomFields(item.id, tempCustomText, undefined);
+                    }
+                  }}
+                >
+                  <Text style={[styles.customTextModalButtonText, styles.customTextModalButtonTextConfirm]}>Aceptar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </Modal>
 
         {/* Modal de variantes */}
@@ -411,20 +618,79 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           )}
         </TouchableOpacity>
 
-        {/* Información del producto */}
+        {/* Información del producto - Renderizado dinámico */}
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productSku}>SKU: {item.sku}</Text>
-          {item.category && (
-            <View style={styles.productCategory}>
-              <Ionicons name="pricetag-outline" size={12} color="#64748b" />
-              <Text style={styles.productCategoryText}>{item.category}</Text>
+          {productFields.length > 0 ? (
+            // Renderizar campos dinámicos según configuración
+            <>
+              {productFields.map((field, index) => {
+                // Agrupar unitsPerBox y stock en una fila
+                if (field.field === 'unitsPerBox') {
+                  const stockField = productFields.find(f => f.field === 'stock');
+                  if (stockField) {
+                    return (
+                      <View key={index} style={styles.boxStockRow}>
+                        <Text style={styles.boxStockText}>Box: {item.unitsPerBox || 0}</Text>
+                        <Text style={styles.boxStockText}>{item.stock || 0} stock</Text>
+                      </View>
+                    );
+                  }
+                }
+                // Saltar el campo stock si ya fue renderizado con unitsPerBox
+                if (field.field === 'stock' && productFields.some(f => f.field === 'unitsPerBox')) {
+                  return null;
+                }
+                return renderDynamicField(field, index);
+              })}
+            </>
+          ) : (
+            // Fallback: mostrar campos por defecto si no hay configuración
+            <>
+              <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+              <Text style={styles.productSku}>SKU: {item.sku}</Text>
+              <Text style={styles.productPrice}>{displayPrice || '0.00'}</Text>
+              <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
+            </>
+          )}
+          
+          {/* Renderizar customText y customSelect en una fila si están habilitados */}
+          {(productFields.some(f => f.field === 'customText') || productFields.some(f => f.field === 'customSelect')) && (
+            <View style={styles.customFieldsRow}>
+              {productFields.some(f => f.field === 'customText') && (
+                <TouchableOpacity 
+                  style={styles.customTextCompact}
+                  onPress={() => {
+                    setTempCustomText(customText);
+                    setShowCustomTextModal(true);
+                  }}
+                >
+                  <Text style={styles.customTextPlaceholder}>
+                    {customText || 'Texto'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {productFields.some(f => f.field === 'customSelect') && (
+                <View style={styles.customSelectCompact}>
+                  <Picker
+                    selectedValue={customSelect}
+                    onValueChange={async (itemValue) => {
+                      setCustomSelect(itemValue);
+                      // Actualizar el carrito si el producto ya está agregado
+                      if (quantity > 0) {
+                        await updateCartItemCustomFields(item.id, undefined, itemValue);
+                      }
+                    }}
+                    style={styles.pickerStyle}
+                  >
+                    <Picker.Item label="Select" value="" />
+                    {(productFields.find(f => f.field === 'customSelect')?.options || []).map((opt: string) => (
+                      <Picker.Item key={opt} label={opt} value={opt} />
+                    ))}
+                  </Picker>
+                </View>
+              )}
             </View>
           )}
-        </View>
-        <View style={styles.productPricing}>
-          <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
-          <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
 
         {/* Renderizado condicional según si tiene variantes o no */}
@@ -434,7 +700,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
             style={styles.viewOptionsButton}
             onPress={handleViewOptions}
           >
-            <Ionicons name="options" size={16} color="#2563eb" />
+            <Ionicons name="options" size={16} color="#ffffff" />
             <Text style={styles.viewOptionsButtonText}>Ver opciones</Text>
           </TouchableOpacity>
         ) : (
@@ -456,6 +722,15 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                   const validValue = Math.max(0, Math.min(numValue, maxStock));
                   setQuantity(validValue);
                 }}
+                onEndEditing={() => {
+                  // Auto-agregar al carrito o eliminar si es 0
+                  if (quantity > 0) {
+                    handleAddToCart(quantity);
+                  } else {
+                    // Eliminar del carrito cuando la cantidad es 0
+                    removeFromCart(item.id);
+                  }
+                }}
                 keyboardType="numeric"
                 placeholder="0"
               />
@@ -466,13 +741,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                 <Ionicons name="add" size={16} color="#64748b" />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.addToCartButton, (adding || quantity === 0) && styles.addToCartButtonDisabled]}
-              onPress={handleAddToCart}
-              disabled={adding || quantity === 0}
-            >
-              <Ionicons name="cart" size={16} color="#ffffff" />
-            </TouchableOpacity>
+
           </View>
         )}
       </View>
@@ -592,99 +861,39 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         return;
       }
       
-      // Cargar todos los productos activos sin parentSku (productos principales y padres)
-      const allMainProducts = await db.getAllAsync<Product>(
-        `SELECT * FROM products 
-         WHERE isActive = 1 
-         AND (parentSku IS NULL OR parentSku = '') 
-         ORDER BY displayOrder ASC, name ASC`
+      // OPTIMIZACIÓN: Consulta SQL optimizada que filtra directamente en la base de datos
+      const result = await db.getAllAsync<any>(
+        `SELECT 
+          p.*,
+          COUNT(v.id) as variantCount,
+          SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount,
+          0 as hideInCatalog
+         FROM products p
+         LEFT JOIN products v ON v.parentSku = p.sku AND v.isActive = 1
+         WHERE p.isActive = 1 
+         AND (p.parentSku IS NULL OR p.parentSku = '') 
+         AND (
+           p.id || p.sku || p.name
+         ) IS NOT NULL
+         GROUP BY p.id
+         HAVING (
+           (COUNT(v.id) > 0 AND SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) > 0)
+           OR (COUNT(v.id) = 0 AND p.hideInCatalog = 0)
+         )
+         ORDER BY p.displayOrder ASC, p.name ASC`
       );
       
-      // Filtrar productos basándose en lógica de visibilidad:
-      // - Productos simples (sin variantes): mostrar si hideInCatalog = 0
-      // - Productos padre (con variantes): mostrar si al menos una variante tiene hideInCatalog = 0
-      const result = [];
+      console.log(`✅ ${result.length} productos visibles cargados`);
       
-      for (const product of allMainProducts) {
-        // Verificar si este producto tiene variantes
-        const variants = await db.getAllAsync<Product>(
-          `SELECT hideInCatalog FROM products 
-           WHERE parentSku = ? AND isActive = 1`,
-          [product.sku]
-        );
-        
-        if (variants.length > 0) {
-          // Es un producto padre - mostrar si al menos una variante es visible
-          const hasVisibleVariant = variants.some(v => v.hideInCatalog === 0);
-          if (hasVisibleVariant) {
-            // ✅ FORZAR hideInCatalog=0 en el producto padre
-            const parentProduct = { ...product, hideInCatalog: 0 };
-            result.push(parentProduct);
-            console.log(`✅ Producto padre con variantes visibles: ${product.name} (${product.sku}) - hideInCatalog forzado a 0`);
-          } else {
-            console.log(`⏭️ Producto padre sin variantes visibles: ${product.name} (${product.sku})`);
-          }
-        } else {
-          // Es un producto simple (sin variantes) - mostrar si no está oculto
-          if (product.hideInCatalog === 0) {
-            result.push(product);
-          }
-        }
-      }
-      
-      console.log(`✅ ${result.length} productos cargados exitosamente (de ${allMainProducts.length} productos principales)`);
-      console.log(`   - Productos simples visibles: ${result.filter(p => !allMainProducts.find(m => m.parentSku === p.sku)).length}`);
-      console.log(`   - Productos padre con variantes visibles: ${result.filter(p => allMainProducts.find(m => m.parentSku === p.sku)).length}`);
-      
-      
-      // 🔍 DEBUG: Verificar productos SPRAY
-      const sprayProducts = await db.getAllAsync<Product>(
-        `SELECT sku, name, parentSku, isActive, hideInCatalog, basePrice, priceCity, priceInterior, priceSpecial 
-         FROM products 
-         WHERE name LIKE '%SPRAY%' OR sku LIKE '%SPRAY%'`
+      // Validación rápida de campos requeridos
+      const validProducts = result.filter((p: Product) => 
+        p.id && p.sku && p.name && (p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial)
       );
-      if (sprayProducts.length > 0) {
-        console.log(`\n🔍 DEBUG: Productos SPRAY en BD (${sprayProducts.length}):`);
-        sprayProducts.forEach(p => {
-          console.log(`  - ${p.name} (${p.sku})`);
-          console.log(`    parentSku: ${p.parentSku || 'NULL'}`);
-          console.log(`    isActive: ${p.isActive}, hideInCatalog: ${p.hideInCatalog}`);
-          console.log(`    Precios: base=${p.basePrice}, city=${p.priceCity}, interior=${p.priceInterior}, special=${p.priceSpecial}`);
-        });
-      }
-      
-      // Validar que los productos tengan los campos requeridos
-      // Debe tener al menos un precio válido (basePrice o alguno de los diferenciados)
-      const validProducts = result.filter(p => {
-        const hasBasicFields = p.id && p.sku && p.name;
-        const hasPrice = p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial;
-        
-        if (!hasBasicFields || !hasPrice) {
-          console.warn('⚠️ Producto inválido filtrado:', {
-            sku: p.sku,
-            name: p.name,
-            hasBasicFields,
-            hasPrice,
-            basePrice: p.basePrice,
-            priceCity: p.priceCity,
-            priceInterior: p.priceInterior,
-            priceSpecial: p.priceSpecial
-          });
-          // 🔍 DEBUG: Alertar si es un producto SPRAY
-          if (p.name?.includes('SPRAY') || p.sku?.includes('SPRAY')) {
-            console.error('❌ SPRAY FILTRADO - Razón:', !hasBasicFields ? 'Campos básicos faltantes' : 'Sin precios válidos');
-          }
-          return false;
-        }
-        
-        return true;
-      });
-      if (validProducts.length < result.length) {
-        console.warn(`⚠️ ${result.length - validProducts.length} productos inválidos filtrados`);
-      }
       
       setProducts(validProducts);
       setFilteredProducts(validProducts);
+      
+      console.log(`🎯 Cargados ${validProducts.length} productos`);
       
       // Extraer categorías únicas
       const uniqueCategories = [...new Set(result.map(p => p.category).filter(c => c))].sort();
@@ -696,6 +905,8 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
       setLoading(false);
     }
   };
+
+
 
   const filterProducts = () => {
     let filtered = [...products];
@@ -846,7 +1057,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         <View style={styles.topBarRight}>
           <View style={styles.topBarCartInfo}>
             <Text style={styles.topBarCartText}>{cartCount.lines} líneas</Text>
-            <Text style={styles.topBarCartText}>${cartTotal}</Text>
+            <Text style={styles.topBarCartText}>{cartTotal}</Text>
           </View>
           <TouchableOpacity
             style={styles.topBarCartButton}
@@ -875,31 +1086,33 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
               </TouchableOpacity>
               {showCategoryDropdown && (
                 <View style={styles.categoryDropdownMenu}>
-                  <TouchableOpacity
-                    style={styles.categoryDropdownItem}
-                    onPress={() => {
-                      setSelectedCategory('');
-                      setShowCategoryDropdown(false);
-                    }}
-                  >
-                    <Text style={[styles.categoryDropdownItemText, !selectedCategory && styles.categoryDropdownItemTextActive]}>
-                      Todas
-                    </Text>
-                  </TouchableOpacity>
-                  {categories.map((category) => (
+                  <ScrollView style={styles.categoryDropdownScroll} nestedScrollEnabled={true}>
                     <TouchableOpacity
-                      key={category}
                       style={styles.categoryDropdownItem}
                       onPress={() => {
-                        setSelectedCategory(category);
+                        setSelectedCategory('');
                         setShowCategoryDropdown(false);
                       }}
                     >
-                      <Text style={[styles.categoryDropdownItemText, selectedCategory === category && styles.categoryDropdownItemTextActive]}>
-                        {category}
+                      <Text style={[styles.categoryDropdownItemText, !selectedCategory && styles.categoryDropdownItemTextActive]}>
+                        Todas
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                    {categories.map((category) => (
+                      <TouchableOpacity
+                        key={category}
+                        style={styles.categoryDropdownItem}
+                        onPress={() => {
+                          setSelectedCategory(category);
+                          setShowCategoryDropdown(false);
+                        }}
+                      >
+                        <Text style={[styles.categoryDropdownItemText, selectedCategory === category && styles.categoryDropdownItemTextActive]}>
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
             </View>
@@ -933,6 +1146,11 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         key={numColumns}
         columnWrapperStyle={styles.productRow}
         contentContainerStyle={styles.productList}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        windowSize={5}
         // refreshControl desactivado - usar botón de sincronización en panel
         // refreshControl={
         //   <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
@@ -1145,6 +1363,9 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     maxHeight: 300,
   },
+  categoryDropdownScroll: {
+    maxHeight: 300,
+  },
   categoryDropdownItem: {
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1226,6 +1447,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
   productImage: {
     width: '100%',
@@ -1245,9 +1468,13 @@ const styles = StyleSheet.create({
   },
   productInfo: {
     padding: 12,
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
   },
   productName: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
@@ -1286,13 +1513,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productPrice: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    color: '#059669',
+    color: '#2563eb',
   },
   productStock: {
     fontSize: 11,
     color: '#6b7280',
+  },
+  boxStockRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  boxStockText: {
+    fontSize: 11,
+    color: '#6b7280',
+  },
+  fieldText: {
+    fontSize: 12,
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  badgeContainer: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  badgeText: {
+    fontSize: 11,
+    color: '#64748b',
   },
   quantityText: {
     fontSize: 16,
@@ -1367,7 +1620,7 @@ const styles = StyleSheet.create({
   },
   viewOptionsButton: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#2563eb',
     borderWidth: 2,
     borderColor: '#2563eb',
     borderRadius: 6,
@@ -1377,21 +1630,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   viewOptionsButtonText: {
-    color: '#2563eb',
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
   },
   productActions: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 8,
     marginTop: 4,
   },
   quantityContainer: {
-    flex: 0.72,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     backgroundColor: '#f3f4f6',
     borderRadius: 6,
     paddingHorizontal: 8,
@@ -1573,5 +1826,91 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  customFieldsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  customTextCompact: {
+    flex: 1,
+    height: 24,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+  },
+  customTextPlaceholder: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  customSelectCompact: {
+    flex: 1,
+    height: 24,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  pickerStyle: {
+    height: 24,
+    fontSize: 12,
+  },
+  customTextModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customTextModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  customTextModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  customTextModalInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  customTextModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  customTextModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  customTextModalButtonCancel: {
+    backgroundColor: '#f3f4f6',
+  },
+  customTextModalButtonConfirm: {
+    backgroundColor: '#3b82f6',
+  },
+  customTextModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  customTextModalButtonTextConfirm: {
+    color: '#ffffff',
   },
 });

@@ -37,7 +37,9 @@ async function saveCart(cart: CartItem[]): Promise<void> {
  */
 export async function addToCart(
   product: Product,
-  quantity: number
+  quantity: number,
+  customText?: string,
+  customSelect?: string
 ): Promise<CartItem[]> {
   const cart = await getCart();
   
@@ -47,9 +49,11 @@ export async function addToCart(
   if (existingIndex >= 0) {
     // Reemplazar cantidad (no sumar)
     cart[existingIndex].quantity = quantity;
+    cart[existingIndex].customText = customText;
+    cart[existingIndex].customSelect = customSelect;
   } else {
     // Agregar nuevo item
-    cart.push({ product, quantity });
+    cart.push({ product, quantity, customText, customSelect });
   }
 
   await saveCart(cart);
@@ -89,6 +93,32 @@ export async function removeFromCart(productId: string): Promise<CartItem[]> {
   const filteredCart = cart.filter((item) => item.product.id !== productId);
   await saveCart(filteredCart);
   return filteredCart;
+}
+
+/**
+ * Actualiza customText y customSelect de un producto en el carrito
+ */
+export async function updateCartItemCustomFields(
+  productId: string,
+  customText?: string,
+  customSelect?: string
+): Promise<CartItem[]> {
+  const cart = await getCart();
+  
+  const index = cart.findIndex((item) => item.product.id === productId);
+
+  if (index >= 0) {
+    // Actualizar campos personalizados
+    if (customText !== undefined) {
+      cart[index].customText = customText;
+    }
+    if (customSelect !== undefined) {
+      cart[index].customSelect = customSelect;
+    }
+  }
+
+  await saveCart(cart);
+  return cart;
 }
 
 /**

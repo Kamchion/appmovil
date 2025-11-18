@@ -62,11 +62,21 @@ export default function OrderDetailScreen() {
       
       // Si no está en pending_orders, buscar en order_history
       if (!order) {
-        console.log('🔍 No encontrado en pending_orders, buscando en order_history...');
+        console.log('🔍 No encontrado en pending_orders, buscando en order_history por ID...');
         order = await db.getFirstAsync<any>(
           'SELECT * FROM order_history WHERE id = ?',
           [orderId]
         );
+        
+        // Si tampoco se encuentra por ID, buscar por orderNumber
+        if (!order) {
+          console.log('🔍 No encontrado por ID, buscando por orderNumber...');
+          order = await db.getFirstAsync<any>(
+            'SELECT * FROM order_history WHERE orderNumber = ?',
+            [orderId]
+          );
+        }
+        
         itemsTableName = 'order_history_items';
       }
 
@@ -80,13 +90,15 @@ export default function OrderDetailScreen() {
       }
 
       // Obtener items del pedido con JOIN a productos
-      console.log('🔍 Buscando items en', itemsTableName, '...');
+      // Usar el ID del pedido encontrado, no el orderId original
+      const actualOrderId = order.id;
+      console.log('🔍 Buscando items en', itemsTableName, 'para orderId:', actualOrderId, '...');
       const itemsRaw = await db.getAllAsync<any>(
         `SELECT items.*, p.name as productName, p.sku as productSku 
          FROM ${itemsTableName} items 
          LEFT JOIN products p ON items.productId = p.id 
          WHERE items.orderId = ?`,
-        [orderId]
+        [actualOrderId]
       );
 
       console.log('📦 Items encontrados:', itemsRaw.length);
@@ -213,7 +225,7 @@ export default function OrderDetailScreen() {
           onPress: async () => {
             setLoading(true);
             try {
-              const { createOrderOnline } = require('../services/api');
+              const { uploadPendingOrders } = require('../services/api');
               const { getDatabase } = require('../database/db');
               const { generateSentOrderNumber } = require('../utils/orderNumber');
               const db = getDatabase();
@@ -236,34 +248,30 @@ export default function OrderDetailScreen() {
                 [orderId]
               );
 
-              // 3. Cargar los productos completos para enviar
-              const cart = [];
-              for (const item of items) {
-                const product = await db.getFirstAsync<any>(
-                  'SELECT * FROM products WHERE id = ?',
-                  [item.productId]
-                );
-                if (product) {
-                  cart.push({
-                    product: {
-                      id: product.id,
-                      name: product.name,
-                      sku: product.sku,
-                      price: item.pricePerUnit
-                    },
-                    quantity: item.quantity,
-                  });
-                }
-              }
+              // 3. Preparar datos para uploadPendingOrders
+              const orderToUpload = {
+                clientId: order.clientId,
+                customerNote: order.customerNote,
+                items: items.map((item: any) => ({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  pricePerUnit: item.pricePerUnit,
+                  customText: item.customText || undefined,
+                  customSelect: item.customSelect || undefined,
+                })),
+                createdAtOffline: order.createdAt,
+              };
 
               try {
                 // 4. Intentar enviar al servidor
                 console.log('🌐 Intentando enviar pedido al backend...');
-                const result = await createOrderOnline({
-                  cart: cart,
-                  customerNote: order.customerNote || '',
-                  selectedClientId: order.clientId.toString(),
-                });
+                const response = await uploadPendingOrders([orderToUpload]);
+                
+                if (!response.success || response.results[0]?.success !== true) {
+                  throw new Error('Error al subir el pedido');
+                }
+                
+                const result = response.results[0];
 
                 // 5. Si tiene éxito, mover a order_history con número B
                 const sentOrderNumber = await generateSentOrderNumber();
@@ -294,8 +302,8 @@ export default function OrderDetailScreen() {
                 for (const item of items) {
                   await db.runAsync(
                     `INSERT INTO order_history_items (
-                      id, orderId, productId, productName, quantity, pricePerUnit, subtotal
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                      id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                       item.id,
                       item.orderId,
@@ -304,6 +312,8 @@ export default function OrderDetailScreen() {
                       item.quantity,
                       item.pricePerUnit,
                       item.subtotal,
+                      item.customText || null,
+                      item.customSelect || null,
                     ]
                   );
                 }
@@ -429,12 +439,12 @@ export default function OrderDetailScreen() {
           <View key={index} style={styles.itemCard}>
             <View style={styles.itemHeader}>
               <Text style={styles.itemName}>{item.productName}</Text>
-              <Text style={styles.itemSubtotal}>${item.subtotal.toFixed(2)}</Text>
+              <Text style={styles.itemSubtotal}>{item.subtotal.toFixed(2)}</Text>
             </View>
             <Text style={styles.itemSku}>SKU: {item.productSku}</Text>
             <View style={styles.itemFooter}>
               <Text style={styles.itemQuantity}>Cantidad: {item.quantity}</Text>
-              <Text style={styles.itemPrice}>Precio: ${item.price.toFixed(2)}</Text>
+              <Text style={styles.itemPrice}>Precio: {item.price.toFixed(2)}</Text>
             </View>
           </View>
         ))}
@@ -445,15 +455,15 @@ export default function OrderDetailScreen() {
         <Text style={styles.sectionTitle}>Resumen</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Subtotal:</Text>
-          <Text style={styles.summaryValue}>${orderDetail.subtotal.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>{orderDetail.subtotal.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Impuestos:</Text>
-          <Text style={styles.summaryValue}>${orderDetail.tax.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>{orderDetail.tax.toFixed(2)}</Text>
         </View>
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalLabel}>Total:</Text>
-          <Text style={styles.totalValue}>${orderDetail.total.toFixed(2)}</Text>
+          <Text style={styles.totalValue}>{orderDetail.total.toFixed(2)}</Text>
         </View>
       </View>
 

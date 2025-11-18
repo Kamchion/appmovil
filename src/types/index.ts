@@ -50,11 +50,15 @@ export interface PendingOrderItem {
   productName: string;
   quantity: number;
   pricePerUnit: string;
+  customText?: string;
+  customSelect?: string;
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
+  customText?: string;
+  customSelect?: string;
 }
 
 export interface SyncStatus {

@@ -251,6 +251,8 @@ export async function uploadPendingOrders(
       productId: string;
       quantity: number;
       pricePerUnit: string;
+      customText?: string;
+      customSelect?: string;
     }>;
     createdAtOffline: string;
   }>
@@ -399,6 +401,8 @@ export async function createOrderOnline(params: {
       price: string;
     };
     quantity: number;
+    customText?: string;
+    customSelect?: string;
   }>;
   customerNote?: string;
   selectedClientId?: string;
@@ -416,6 +420,8 @@ export async function createOrderOnline(params: {
     await trpcMutation('cart.addItem', {
       productId: item.product.id,
       quantity: item.quantity,
+      customText: item.customText,
+      customSelect: item.customSelect,
     });
   }
   
@@ -427,4 +433,18 @@ export async function createOrderOnline(params: {
       selectedClientId: params.selectedClientId,
     }
   );
+}
+
+/**
+ * Obtiene la configuración de campos de producto para vendedores
+ */
+export async function getProductFieldsVendor(): Promise<any[]> {
+  return await trpcQuery<any[]>('config.getProductFieldsVendor');
+}
+
+/**
+ * Obtiene los estilos de tarjetas de producto
+ */
+export async function getCardStyles(): Promise<any> {
+  return await trpcQuery<any>('config.getCardStyles');
 }

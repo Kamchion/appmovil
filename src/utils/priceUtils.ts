@@ -76,7 +76,7 @@ export function getProductPrice(product: Product, priceType: PriceType): string 
  * formatPrice("1.50") // Returns: "$1.50"
  * formatPrice("1.50", "Q") // Returns: "Q1.50"
  */
-export function formatPrice(price: string, currency: string = '$'): string {
+export function formatPrice(price: string, currency: string = ''): string {
   const numPrice = parseFloat(price);
   if (isNaN(numPrice)) {
     return `${currency}0.00`;
@@ -99,7 +99,7 @@ export function formatPrice(price: string, currency: string = '$'): string {
 export function getFormattedProductPrice(
   product: Product,
   priceType: PriceType,
-  currency: string = '$'
+  currency: string = ''
 ): string {
   const price = getProductPrice(product, priceType);
   return formatPrice(price, currency);

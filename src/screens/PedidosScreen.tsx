@@ -154,6 +154,15 @@ export default function PedidosScreen({ navigation }: any) {
       Alert.alert('Campos requeridos', 'Por favor completa todos los campos marcados con *');
       return;
     }
+    
+    // Validar formato de email si se proporciona
+    if (newClientData.email && newClientData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newClientData.email.trim())) {
+        Alert.alert('Error', 'El formato del email es inválido. Por favor, ingresa un email válido (ejemplo: usuario@dominio.com)');
+        return;
+      }
+    }
 
     setIsCreating(true);
 

@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../services/api';
 import { initDatabase } from '../database/db';
+import Constants from 'expo-constants';
 
 const TOKEN_KEY = 'vendor_token';
 const USER_KEY = 'vendor_user';
@@ -195,6 +196,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           Esta app funciona offline. Tus pedidos se sincronizarán automáticamente cuando tengas conexión.
           {'\n\n'}💡 Después del primer login, podrás acceder sin conexión.
         </Text>
+        
+        {/* Número de versión */}
+        <Text style={styles.version}>
+          v{Constants.expoConfig?.version || '2.2.0'}
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -261,5 +267,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  version: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 12,
+    fontWeight: '500',
   },
 });

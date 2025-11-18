@@ -10,7 +10,6 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import Constants from 'expo-constants';
 import { fullSync, incrementalSync, checkConnection } from '../services/sync';
 
 /**
@@ -132,70 +131,7 @@ export default function DashboardHomeScreen() {
     );
   };
 
-  const handleSyncData = async () => {
-    if (!isOnline) {
-      Alert.alert(
-        'Sin conexión',
-        'No hay conexión a internet.'
-      );
-      return;
-    }
 
-    Alert.alert(
-      '🔄 Sync Data',
-      'Esto eliminará productos y clientes locales y los volverá a descargar. Tu historial de pedidos y carrito se mantendrán intactos. ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sincronizar',
-          onPress: async () => {
-            setIsSyncing(true);
-            setSyncMessage('Limpiando productos y clientes...');
-
-            try {
-              // Limpiar solo productos y clientes
-              const { clearProductsAndClients } = require('../database/db');
-              await clearProductsAndClients();
-              
-              // Limpiar timestamp para forzar sincronización completa
-              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-              await AsyncStorage.removeItem('last_sync_timestamp');
-              
-              setSyncMessage('Descargando catálogo actualizado...');
-              
-              // Sincronizar desde cero
-              const result = await fullSync((message) => {
-                setSyncMessage(message);
-              });
-
-              if (result.success) {
-                Alert.alert(
-                  '✅ Sync Data Completo',
-                  `${result.productsUpdated} productos\n${result.clientsUpdated || 0} clientes\n\nTu historial y carrito se mantuvieron intactos.`,
-                  [{ text: 'OK' }]
-                );
-              } else {
-                Alert.alert(
-                  '⚠️ Error',
-                  result.message,
-                  [{ text: 'OK' }]
-                );
-              }
-            } catch (error: any) {
-              Alert.alert(
-                '❌ Error',
-                error.message || 'Error desconocido',
-                [{ text: 'OK' }]
-              );
-            } finally {
-              setIsSyncing(false);
-              setSyncMessage('');
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const menuItems = [
     {
@@ -251,18 +187,6 @@ export default function DashboardHomeScreen() {
         </View>
         
         <View style={styles.statusRight}>
-          <TouchableOpacity
-            style={[
-              styles.syncDataButton,
-              (!isOnline || isSyncing) && styles.syncButtonDisabled,
-            ]}
-            onPress={handleSyncData}
-            disabled={!isOnline || isSyncing}
-          >
-            <Text style={styles.syncButtonIcon}>🔄</Text>
-            <Text style={styles.syncButtonText}>Sync Data</Text>
-          </TouchableOpacity>
-          
           <TouchableOpacity
             style={[
               styles.syncButton,
@@ -323,11 +247,6 @@ export default function DashboardHomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Versión de la app */}
-        <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>Versión {Constants.expoConfig?.version || '3.0.0'}</Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -382,15 +301,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-  },
-  syncDataButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginRight: 8,
   },
   syncButtonDisabled: {
     backgroundColor: '#94a3b8',
@@ -476,15 +386,5 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
-  },
-  versionContainer: {
-    marginTop: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  versionText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '500',
   },
 });

@@ -19,8 +19,10 @@ import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import OrderDetailScreen from './src/screens/OrderDetailScreen';
+import LogViewerScreen from './src/screens/LogViewerScreen';
 
 // Services
+import logger from './src/services/logger';
 import { setupAutoSync } from './src/services/sync';
 import { initImageCache } from './src/services/imageCache';
 import { initDatabase, resetDatabase } from './src/database/db';
@@ -34,6 +36,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
+  const navigationRef = React.useRef<any>(null);
 
   useEffect(() => {
     initializeApp();
@@ -172,8 +175,9 @@ export default function App() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Importar AsyncStorage
+              // Importar AsyncStorage y FileSystem
               const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+              const FileSystem = (await import('expo-file-system/legacy')).default;
               
               // 1. Borrar todos los datos de la base de datos
               const { getDatabase } = await import('./src/database/db');
@@ -185,16 +189,24 @@ export default function App() {
               await db.execAsync('DELETE FROM products');
               await db.execAsync('DELETE FROM clients');
               
-              // 2. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
+              // 2. Borrar todas las imágenes descargadas
+              const imageDir = `${FileSystem.documentDirectory}product_images/`;
+              const dirInfo = await FileSystem.getInfoAsync(imageDir);
+              if (dirInfo.exists) {
+                await FileSystem.deleteAsync(imageDir, { idempotent: true });
+                console.log('✅ Directorio de imágenes eliminado');
+              }
+              
+              // 3. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
               await AsyncStorage.removeItem('last_sync_timestamp');
               
-              // 3. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
+              // 4. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
               await AsyncStorage.removeItem('@cart');
               await AsyncStorage.removeItem('selectedClientId');
               await AsyncStorage.removeItem('selectedClientData');
               await AsyncStorage.removeItem('editingOrderId');
               
-              console.log('✅ Todos los datos han sido eliminados, incluyendo timestamps de sincronización');
+              console.log('✅ Todos los datos han sido eliminados, incluyendo imágenes y timestamps de sincronización');
               Alert.alert('Éxito', 'Todos los datos han sido eliminados. La app está como recién instalada.');
             } catch (error) {
               console.error('Error al borrar datos:', error);
@@ -218,7 +230,14 @@ export default function App() {
         },
         {
           text: 'Salir',
-          onPress: () => BackHandler.exitApp(),
+          onPress: async () => {
+            // Hacer logout completo
+            await AsyncStorage.removeItem('vendor_token');
+            await AsyncStorage.removeItem('vendor_user');
+            setIsLoggedIn(false);
+            // Cerrar la app
+            BackHandler.exitApp();
+          },
         },
       ]
     );
@@ -253,6 +272,19 @@ export default function App() {
             </TouchableOpacity>
             
             <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={() => {
+                setMenuVisible(false);
+                // Navegar a logs usando la referencia de navegación
+                setTimeout(() => {
+                  navigationRef.current?.navigate('LogViewer');
+                }, 100);
+              }}
+            >
+              <Text style={styles.menuButtonText}>📋 Ver Logs</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
               style={[styles.menuButton, styles.deleteButton]}
               onPress={handleDeleteAll}
             >
@@ -276,7 +308,7 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
       
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           screenOptions={{
             headerStyle: {
@@ -391,6 +423,17 @@ export default function App() {
                 name="OrderDetail"
                 component={OrderDetailScreen}
                 options={{ title: 'Detalles del Pedido' }}
+              />
+
+              {/* Log Viewer */}
+              <Stack.Screen
+                name="LogViewer"
+                component={LogViewerScreen}
+                options={{ 
+                  title: 'Logs del Sistema',
+                  headerStyle: { backgroundColor: '#0F172A' },
+                  headerTintColor: '#F1F5F9',
+                }}
               />
             </>
           )}

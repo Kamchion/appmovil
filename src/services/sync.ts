@@ -164,6 +164,25 @@ export async function syncCatalog(
     // Actualizar timestamp de última sincronización
     await setLastSyncTimestamp(response.timestamp);
 
+    // Sincronizar configuración de campos de producto y estilos
+    onProgress?.('Sincronizando configuración de tarjetas...');
+    try {
+      const { getProductFieldsVendor, getCardStyles } = await import('./api');
+      const { syncProductFields, syncCardStyles } = await import('../database/db');
+      
+      const [fields, styles] = await Promise.all([
+        getProductFieldsVendor(),
+        getCardStyles()
+      ]);
+      
+      await syncProductFields(fields);
+      await syncCardStyles(styles);
+      
+      console.log('✅ Configuración de tarjetas sincronizada');
+    } catch (configError) {
+      console.warn('⚠️ Error al sincronizar configuración de tarjetas:', configError);
+    }
+
     // Cachear imágenes de productos
     onProgress?.('Descargando imágenes...');
     const imageUrls = response.products
@@ -347,6 +366,9 @@ export async function syncCatalog(
   }
 }
 
+// Flag para evitar múltiples sincronizaciones de pedidos simultáneas
+let isPendingOrdersSyncInProgress = false;
+
 /**
  * Sincroniza pedidos pendientes
  * Sube pedidos creados offline al servidor
@@ -354,6 +376,18 @@ export async function syncCatalog(
 export async function syncPendingOrders(
   onProgress?: (message: string) => void
 ): Promise<{ success: boolean; message: string; ordersSynced: number }> {
+  // Verificar si ya hay una sincronización en progreso
+  if (isPendingOrdersSyncInProgress) {
+    console.log('⚠️ syncPendingOrders ya en progreso, omitiendo...');
+    return {
+      success: false,
+      message: 'Sincronización ya en progreso',
+      ordersSynced: 0,
+    };
+  }
+  
+  isPendingOrdersSyncInProgress = true;
+  
   try {
     onProgress?.('Verificando conexión...');
     const isOnline = await checkConnection();
@@ -371,12 +405,16 @@ export async function syncPendingOrders(
     
     // Obtener pedidos pendientes (no sincronizados y con status='pending')
     // ✅ Excluir borradores (status='draft') de la sincronización automática
+    // ✅ Usar DISTINCT para evitar duplicados
     const pendingOrders = await db.getAllAsync<PendingOrder>(
-      "SELECT * FROM pending_orders WHERE synced = 0 AND status = 'pending'"
+      "SELECT DISTINCT * FROM pending_orders WHERE synced = 0 AND status = 'pending' GROUP BY id"
     );
 
     console.log(`📊 syncPendingOrders: Encontrados ${pendingOrders.length} pedidos pendientes`);
-    console.log('📋 Pedidos:', pendingOrders.map(o => ({ id: o.id, status: o.status, synced: o.synced })));
+    console.log('📋 Pedidos encontrados:');
+    pendingOrders.forEach((o, idx) => {
+      console.log(`  ${idx + 1}. ID: ${o.id}, Status: ${o.status}, Synced: ${o.synced}, CreatedAt: ${o.createdAt}`);
+    });
 
     if (pendingOrders.length === 0) {
       return {
@@ -403,6 +441,8 @@ export async function syncPendingOrders(
             productId: item.productId,
             quantity: item.quantity,
             pricePerUnit: item.pricePerUnit,
+            customText: item.customText || undefined,
+            customSelect: item.customSelect || undefined,
           })),
           createdAtOffline: order.createdAt,
         };
@@ -411,6 +451,16 @@ export async function syncPendingOrders(
 
     // Subir pedidos al servidor
     console.log('📤 Enviando pedidos al servidor:', ordersToUpload.length);
+    console.log('📝 Detalle de pedidos a enviar:');
+    ordersToUpload.forEach((order, index) => {
+      console.log(`  Pedido ${index + 1}:`, {
+        clientId: order.clientId,
+        createdAtOffline: order.createdAtOffline,
+        itemsCount: order.items.length,
+        firstItemId: order.items[0]?.productId
+      });
+    });
+    
     const response = await uploadPendingOrders(ordersToUpload);
     console.log('📥 Respuesta del servidor:', response);
 
@@ -426,15 +476,32 @@ export async function syncPendingOrders(
     // Mover pedidos sincronizados a order_history
     for (const result of response.results) {
       if (result.success) {
-        // Obtener el pedido original
-        const order = await db.getFirstAsync<PendingOrder>(
-          'SELECT * FROM pending_orders WHERE createdAt = ?',
-          [result.createdAtOffline]
-        );
-        
-        if (order) {
-          // Generar nuevo número B para el pedido enviado
-          const sentOrderNumber = await generateSentOrderNumber();
+        try {
+          // Obtener el pedido original
+          const order = await db.getFirstAsync<PendingOrder>(
+            'SELECT * FROM pending_orders WHERE createdAt = ?',
+            [result.createdAtOffline]
+          );
+          
+          if (!order) {
+            console.warn('⚠️ Pedido no encontrado para createdAt:', result.createdAtOffline);
+            continue;
+          }
+          
+          // Verificar si ya existe en order_history (protección contra duplicados)
+          const existingHistory = await db.getFirstAsync<any>(
+            'SELECT id FROM order_history WHERE id = ?',
+            [order.id]
+          );
+          
+          if (existingHistory) {
+            console.log('✅ Pedido ya existe en historial, solo eliminando de pending:', order.id);
+            await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
+            await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+            continue;
+          }
+          // Mantener el mismo ID (ya tiene formato {agentNumber}A{8-digit})
+          const orderNumber = order.orderNumber || order.id;
           
           // Obtener los items del pedido
           const items = await db.getAllAsync<PendingOrderItem>(
@@ -442,14 +509,15 @@ export async function syncPendingOrders(
             [order.id]
           );
           
-          // Insertar en order_history con número B y status "enviado"
+          // Insertar en order_history con el mismo ID y status "enviado"
           const historyResult = await db.runAsync(
             `INSERT INTO order_history (
-              orderNumber, clientId, customerName, customerNote,
+              id, orderNumber, clientId, customerName, customerNote,
               subtotal, total, tax, status, synced, createdAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              sentOrderNumber, // Nuevo número B
+              order.id, // Mantener el mismo ID
+              orderNumber, // Mantener el mismo orderNumber
               order.clientId,
               order.customerName,
               order.customerNote,
@@ -462,15 +530,15 @@ export async function syncPendingOrders(
             ]
           );
           
-          // Obtener el ID generado automáticamente
-          const newHistoryId = historyResult.lastInsertRowId;
+          // Usar el mismo ID del pedido original
+          const newHistoryId = order.id;
           
           // Insertar items en order_history_items
           for (const item of items) {
             await db.runAsync(
               `INSERT INTO order_history_items (
-                orderId, productId, productName, quantity, pricePerUnit, subtotal
-              ) VALUES (?, ?, ?, ?, ?, ?)`,
+                orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newHistoryId, // Usar el nuevo ID de order_history
                 item.productId,
@@ -478,6 +546,8 @@ export async function syncPendingOrders(
                 item.quantity,
                 item.pricePerUnit,
                 item.subtotal,
+                item.customText || null,
+                item.customSelect || null,
               ]
             );
           }
@@ -485,6 +555,12 @@ export async function syncPendingOrders(
           // Eliminar de pending_orders y pending_order_items
           await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
           await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+          
+          console.log('✅ Pedido procesado correctamente:', order.id);
+        } catch (error: any) {
+          console.error('❌ Error al procesar resultado de sincronización:', error);
+          console.error('  createdAtOffline:', result.createdAtOffline);
+          // Continuar con el siguiente pedido aunque falle uno
         }
       }
     }
@@ -502,6 +578,8 @@ export async function syncPendingOrders(
       message: error.message || 'Error desconocido',
       ordersSynced: 0,
     };
+  } finally {
+    isPendingOrdersSyncInProgress = false;
   }
 }
 
@@ -555,6 +633,8 @@ export async function syncSingleOrder(
         productId: item.productId,
         quantity: item.quantity,
         pricePerUnit: item.pricePerUnit,
+        customText: item.customText,
+        customSelect: item.customSelect,
       })),
       createdAtOffline: order.createdAt,
     };
@@ -601,8 +681,8 @@ export async function syncSingleOrder(
     for (const item of items) {
       await db.runAsync(
         `INSERT INTO order_history_items (
-          id, orderId, productId, sku, quantity, pricePerUnit, price
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          id, orderId, productId, sku, quantity, pricePerUnit, price, customText, customSelect
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           item.id,
           item.orderId,
@@ -611,6 +691,8 @@ export async function syncSingleOrder(
           item.quantity,
           item.pricePerUnit,
           item.price,
+          item.customText || null,
+          item.customSelect || null,
         ]
       );
     }
@@ -836,10 +918,11 @@ export async function incrementalSync(
     onProgress?.('Descargando cambios en clientes...');
     
     let clientsUpdated = 0;
+    let clientChanges: any = { success: false, timestamp: null };  // ✅ Declarar fuera del try-catch
     
     try {
       const { getClientChanges } = require('./api');
-      const clientChanges = await getClientChanges(lastSync);
+      clientChanges = await getClientChanges(lastSync);  // ✅ Asignar en lugar de declarar
     
     if (clientChanges.success && clientChanges.clients) {
       for (const client of clientChanges.clients) {
@@ -879,9 +962,20 @@ export async function incrementalSync(
       // Continuar aunque falle la descarga de clientes
     }
     
-    // Actualizar timestamp de última sincronización
-    const now = new Date().toISOString();
-    await AsyncStorage.setItem(LAST_SYNC_KEY, now);
+    // ✅ CORRECCIÓN CRÍTICA: Usar el timestamp del servidor, no new Date()
+    // Esto asegura que la próxima sincronización pida cambios desde el momento correcto
+    const serverTimestamp = Math.max(
+      productChanges.timestamp ? new Date(productChanges.timestamp).getTime() : 0,
+      clientChanges?.timestamp ? new Date(clientChanges.timestamp).getTime() : 0
+    );
+    
+    // Si obtuvimos un timestamp válido del servidor, usarlo; sino usar la hora actual
+    const newSyncTimestamp = serverTimestamp > 0 
+      ? new Date(serverTimestamp).toISOString()
+      : new Date().toISOString();
+    
+    await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
+    console.log('✅ Timestamp de sincronización actualizado:', newSyncTimestamp);
     
     const message = `${productsUpdated} productos, ${clientsUpdated} clientes, ${imagesDownloaded} imágenes actualizadas`;
     
@@ -906,6 +1000,11 @@ export async function incrementalSync(
   }
 }
 
+// Flag global para evitar sincronizaciones concurrentes
+let isSyncInProgress = false;
+let lastSyncTime = 0;
+const MIN_SYNC_INTERVAL = 5000; // 5 segundos mínimo entre sincronizaciones
+
 /**
  * Configura sincronización automática al detectar conexión
  */
@@ -914,11 +1013,35 @@ export function setupAutoSync(
 ): () => void {
   const unsubscribe = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
+      const now = Date.now();
+      
+      // Verificar si ya hay una sincronización en progreso
+      if (isSyncInProgress) {
+        console.log('⚠️ Sincronización ya en progreso, omitiendo...');
+        return;
+      }
+      
+      // Verificar si ha pasado suficiente tiempo desde la última sincronización
+      if (now - lastSyncTime < MIN_SYNC_INTERVAL) {
+        console.log('⏱️ Sincronización reciente, omitiendo (esperar', Math.ceil((MIN_SYNC_INTERVAL - (now - lastSyncTime)) / 1000), 's)...');
+        return;
+      }
+      
       console.log('🌐 Conexión detectada, iniciando sincronización automática...');
-      fullSync().then((result) => {
-        console.log('✅ Sincronización automática completada:', result);
-        onSyncComplete?.(result);
-      });
+      isSyncInProgress = true;
+      lastSyncTime = now;
+      
+      fullSync()
+        .then((result) => {
+          console.log('✅ Sincronización automática completada:', result);
+          onSyncComplete?.(result);
+        })
+        .catch((error) => {
+          console.error('❌ Error en sincronización automática:', error);
+        })
+        .finally(() => {
+          isSyncInProgress = false;
+        });
     }
   });
 

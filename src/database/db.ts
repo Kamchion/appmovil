@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DB_NAME = 'vendedor_offline.db';
-const DB_VERSION = 4; // Incrementar cuando hay cambios en el esquema
+const DB_VERSION = 6; // Incrementar cuando hay cambios en el esquema
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -161,7 +161,8 @@ export async function initDatabase(): Promise<void> {
         customerNote TEXT,
         createdAt TEXT,
         updatedAt TEXT,
-        syncedAt TEXT
+        syncedAt TEXT,
+        synced INTEGER DEFAULT 1
       );
     `);
 
@@ -189,11 +190,48 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // Crear tabla de configuración de campos de producto
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS product_fields (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        field TEXT NOT NULL,
+        label TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        "order" INTEGER DEFAULT 0,
+        displayType TEXT DEFAULT 'text',
+        "column" TEXT DEFAULT 'full',
+        textColor TEXT,
+        fontSize TEXT,
+        fontWeight TEXT,
+        textAlign TEXT,
+        options TEXT,
+        maxLength INTEGER,
+        syncedAt TEXT NOT NULL
+      );
+    `);
+
+    // Crear tabla de estilos de tarjetas
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS card_styles (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        marginTop INTEGER DEFAULT 6,
+        marginBottom INTEGER DEFAULT 8,
+        marginLeft INTEGER DEFAULT 6,
+        marginRight INTEGER DEFAULT 6,
+        imageSpacing INTEGER DEFAULT 16,
+        fieldSpacing INTEGER DEFAULT 4,
+        syncedAt TEXT NOT NULL
+      );
+    `);
+
     // Crear índices para mejorar rendimiento
     await db.execAsync(`
       CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
       CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
       CREATE INDEX IF NOT EXISTS idx_products_active ON products(isActive);
+      CREATE INDEX IF NOT EXISTS idx_products_parent ON products(parentSku);
+      CREATE INDEX IF NOT EXISTS idx_products_hide ON products(hideInCatalog);
+      CREATE INDEX IF NOT EXISTS idx_products_composite ON products(isActive, parentSku, hideInCatalog);
       CREATE INDEX IF NOT EXISTS idx_clients_active ON clients(isActive);
       CREATE INDEX IF NOT EXISTS idx_clients_vendor ON clients(assignedVendorId);
       CREATE INDEX IF NOT EXISTS idx_clients_pricetype ON clients(priceType);
@@ -210,6 +248,9 @@ export async function initDatabase(): Promise<void> {
       'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
       ['db_version', DB_VERSION.toString()]
     );
+
+    // Inicializar estilos por defecto si no existen
+    await initializeDefaultStyles(db);
 
     console.log('✅ Base de datos inicializada correctamente (versión ' + DB_VERSION + ')');
   } catch (error) {
@@ -543,6 +584,44 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
         console.log('✅ Migración v4 completada');
       }
 
+      // Migración v5: Agregar columnas options y maxLength a product_fields
+      if (currentVersion < 5) {
+        console.log('🔄 Aplicando migración v5: Agregando columnas options y maxLength a product_fields...');
+        
+        try {
+          await database.execAsync(`
+            ALTER TABLE product_fields ADD COLUMN options TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE product_fields ADD COLUMN maxLength INTEGER;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        console.log('✅ Migración v5 completada');
+      }
+
+      // Migración v6: Agregar columna synced a order_history
+      if (currentVersion < 6) {
+        console.log('🔄 Aplicando migración v6: Agregando columna synced a order_history...');
+        
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history ADD COLUMN synced INTEGER DEFAULT 1;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        console.log('✅ Migración v6 completada');
+      }
+
       // Actualizar versión en config
       await database.execAsync(
         'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
@@ -594,23 +673,6 @@ export async function clearDatabase(): Promise<void> {
 }
 
 /**
- * Limpia solo las tablas de productos y clientes
- * Preserva el historial de pedidos y el carrito
- * Útil para re-sincronizar catálogo sin perder datos de pedidos
- */
-export async function clearProductsAndClients(): Promise<void> {
-  const database = getDatabase();
-  
-  await database.execAsync(`
-    DELETE FROM pricing_by_type;
-    DELETE FROM products;
-    DELETE FROM clients;
-  `);
-  
-  console.log('✅ Productos y clientes eliminados (historial y carrito preservados)');
-}
-
-/**
  * Elimina completamente la base de datos y la recrea
  * Útil para resolver problemas de corrupción
  */
@@ -636,5 +698,244 @@ export async function resetDatabase(): Promise<void> {
   } catch (error) {
     console.error('❌ Error al resetear base de datos:', error);
     throw error;
+  }
+}
+
+/**
+ * Sincroniza la configuración de campos de producto desde el servidor
+ */
+export async function syncProductFields(fields: any[]): Promise<void> {
+  const database = getDatabase();
+  
+  try {
+    // Limpiar campos existentes
+    await database.runAsync('DELETE FROM product_fields');
+    
+    // Insertar nuevos campos
+    for (const field of fields) {
+      await database.runAsync(
+        `INSERT INTO product_fields (field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign, options, maxLength, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          field.field,
+          field.label,
+          field.enabled ? 1 : 0,
+          field.order || 0,
+          field.displayType || 'text',
+          field.column || 'full',
+          field.textColor || null,
+          field.fontSize || null,
+          field.fontWeight || null,
+          field.textAlign || null,
+          field.options ? JSON.stringify(field.options) : null,
+          field.maxLength || null,
+          new Date().toISOString()
+        ]
+      );
+    }
+    
+    console.log(`✅ ${fields.length} campos de producto sincronizados`);
+  } catch (error) {
+    console.error('❌ Error al sincronizar campos de producto:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtiene la configuración de campos de producto desde la base de datos local
+ */
+export async function getProductFields(): Promise<any[]> {
+  const database = getDatabase();
+  
+  try {
+    const fields = await database.getAllAsync<any>(
+      `SELECT field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign, options, maxLength
+       FROM product_fields
+       WHERE enabled = 1
+       ORDER BY "order" ASC`
+    );
+    
+    return fields.map(field => ({
+      field: field.field,
+      label: field.label,
+      enabled: field.enabled === 1,
+      order: field.order,
+      displayType: field.displayType,
+      column: field.column,
+      textColor: field.textColor,
+      fontSize: field.fontSize,
+      fontWeight: field.fontWeight,
+      textAlign: field.textAlign,
+      options: field.options ? JSON.parse(field.options) : undefined,
+      maxLength: field.maxLength,
+    }));
+  } catch (error) {
+    console.error('❌ Error al obtener campos de producto:', error);
+    return [];
+  }
+}
+
+/**
+ * Sincroniza los estilos de tarjetas desde el servidor
+ */
+export async function syncCardStyles(styles: any): Promise<void> {
+  const database = getDatabase();
+  
+  try {
+    const margins = styles.margins || { top: 6, bottom: 8, left: 6, right: 6 };
+    const imageSpacing = styles.imageSpacing || 16;
+    const fieldSpacing = styles.fieldSpacing || 4;
+    
+    await database.runAsync(
+      `INSERT OR REPLACE INTO card_styles (id, marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing, syncedAt)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        margins.top,
+        margins.bottom,
+        margins.left,
+        margins.right,
+        imageSpacing,
+        fieldSpacing,
+        new Date().toISOString()
+      ]
+    );
+    
+    console.log('✅ Estilos de tarjetas sincronizados');
+  } catch (error) {
+    console.error('❌ Error al sincronizar estilos de tarjetas:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtiene los estilos de tarjetas desde la base de datos local
+ */
+export async function getCardStyles(): Promise<any> {
+  const database = getDatabase();
+  
+  try {
+    const result = await database.getFirstAsync<any>(
+      'SELECT marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing FROM card_styles WHERE id = 1'
+    );
+    
+    if (!result) {
+      // Retornar valores por defecto si no hay estilos guardados
+      return {
+        margins: { top: 6, bottom: 8, left: 6, right: 6 },
+        imageSpacing: 16,
+        fieldSpacing: 4,
+      };
+    }
+    
+    return {
+      margins: {
+        top: result.marginTop,
+        bottom: result.marginBottom,
+        left: result.marginLeft,
+        right: result.marginRight,
+      },
+      imageSpacing: result.imageSpacing,
+      fieldSpacing: result.fieldSpacing,
+    };
+  } catch (error) {
+    console.error('❌ Error al obtener estilos de tarjetas:', error);
+    return {
+      margins: { top: 6, bottom: 8, left: 6, right: 6 },
+      imageSpacing: 16,
+      fieldSpacing: 4,
+    };
+  }
+}
+
+
+/**
+ * Inicializa los estilos por defecto en la base de datos local
+ * Simula que el servidor envió esta configuración
+ */
+async function initializeDefaultStyles(database: SQLite.SQLiteDatabase): Promise<void> {
+  try {
+    // Verificar si ya existen estilos
+    const existingFields = await database.getAllAsync<any>(
+      'SELECT COUNT(*) as count FROM product_fields'
+    );
+    
+    if (existingFields[0].count > 0) {
+      console.log('✅ Estilos ya inicializados, omitiendo...');
+      return;
+    }
+    
+    console.log('🎨 Inicializando estilos por defecto...');
+    
+    // Configuración de campos por defecto
+    const defaultFields = [
+      {
+        field: 'name',
+        label: 'Nombre',
+        enabled: 1,
+        order: 1,
+        displayType: 'multiline',
+        column: 'full',
+        textColor: '#1e293b',
+        fontSize: '10',
+        fontWeight: '600',
+        textAlign: 'left'
+      },
+      {
+        field: 'rolePrice',
+        label: 'Precio',
+        enabled: 1,
+        order: 2,
+        displayType: 'price',
+        column: 'full',
+        textColor: '#2563eb',
+        fontSize: '14',
+        fontWeight: 'bold',
+        textAlign: 'left'
+      },
+      {
+        field: 'stock',
+        label: 'Stock',
+        enabled: 1,
+        order: 3,
+        displayType: 'number',
+        column: 'full',
+        textColor: '#6b7280',
+        fontSize: '12',
+        fontWeight: '400',
+        textAlign: 'left'
+      }
+    ];
+    
+    // Insertar campos por defecto
+    for (const field of defaultFields) {
+      await database.runAsync(
+        `INSERT INTO product_fields (field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign, syncedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          field.field,
+          field.label,
+          field.enabled,
+          field.order,
+          field.displayType,
+          field.column,
+          field.textColor,
+          field.fontSize,
+          field.fontWeight,
+          field.textAlign,
+          new Date().toISOString()
+        ]
+      );
+    }
+    
+    // Insertar estilos de tarjeta por defecto
+    await database.runAsync(
+      `INSERT OR REPLACE INTO card_styles (id, marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing, syncedAt)
+       VALUES (1, 6, 8, 6, 6, 16, 4, ?)`,
+      [new Date().toISOString()]
+    );
+    
+    console.log('✅ Estilos por defecto inicializados');
+  } catch (error) {
+    console.error('❌ Error al inicializar estilos por defecto:', error);
   }
 }
