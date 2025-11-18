@@ -175,11 +175,13 @@ export default function App() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Importar AsyncStorage y FileSystem
+              console.log('🗑️ Iniciando borrado de datos...');
+              
+              // Importar AsyncStorage
               const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-              const FileSystem = (await import('expo-file-system/legacy')).default;
               
               // 1. Borrar todos los datos de la base de datos
+              console.log('1/4 Borrando datos de la base de datos...');
               const { getDatabase } = await import('./src/database/db');
               const db = getDatabase();
               await db.execAsync('DELETE FROM pending_orders');
@@ -188,29 +190,26 @@ export default function App() {
               await db.execAsync('DELETE FROM order_history_items');
               await db.execAsync('DELETE FROM products');
               await db.execAsync('DELETE FROM clients');
+              console.log('✅ Datos de BD eliminados');
               
-              // 2. Borrar todas las imágenes descargadas
-              const imageDir = `${FileSystem.documentDirectory}product_images/`;
-              const dirInfo = await FileSystem.getInfoAsync(imageDir);
-              if (dirInfo.exists) {
-                await FileSystem.deleteAsync(imageDir, { idempotent: true });
-                console.log('✅ Directorio de imágenes eliminado');
-              }
-              
-              // 3. Borrar timestamps de sincronización (para que la próxima sincronización descargue todo)
+              // 2. Borrar timestamps de sincronización (IMPORTANTE para que funcione sync incremental)
+              console.log('2/3 Limpiando timestamp de sincronización...');
               await AsyncStorage.removeItem('last_sync_timestamp');
+              console.log('✅ Timestamp limpiado');
               
-              // 4. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
+              // 3. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
+              console.log('3/3 Limpiando datos de sesión...');
               await AsyncStorage.removeItem('@cart');
               await AsyncStorage.removeItem('selectedClientId');
               await AsyncStorage.removeItem('selectedClientData');
               await AsyncStorage.removeItem('editingOrderId');
+              console.log('✅ Datos de sesión limpiados');
               
-              console.log('✅ Todos los datos han sido eliminados, incluyendo imágenes y timestamps de sincronización');
-              Alert.alert('Éxito', 'Todos los datos han sido eliminados. La app está como recién instalada.');
-            } catch (error) {
-              console.error('Error al borrar datos:', error);
-              Alert.alert('Error', 'No se pudieron borrar los datos');
+              console.log('✅ Todos los datos han sido eliminados exitosamente');
+              Alert.alert('✅ Éxito', 'Todos los datos han sido eliminados.\n\nAhora usa "Sincronizar" para descargar los datos nuevamente.');
+            } catch (error: any) {
+              console.error('❌ Error al borrar datos:', error);
+              Alert.alert('❌ Error', 'No se pudieron borrar los datos: ' + (error.message || 'Error desconocido'));
             }
           },
         },
