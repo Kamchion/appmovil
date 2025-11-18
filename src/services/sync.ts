@@ -96,11 +96,11 @@ export async function syncCatalog(
     
     for (const product of response.products) {
       try {
-        // ✅ Si el producto está inactivo, eliminarlo de la BD local
+        // ✅ Si el producto está inactivo, eliminarlo de la BD local (por SKU)
         if (product.isActive === false) {
           await db.runAsync(
-            `DELETE FROM products WHERE id = ?`,
-            [product.id]
+            `DELETE FROM products WHERE sku = ?`,
+            [product.sku]
           );
           deletedCount++;
           console.log(`🗑️ Producto eliminado: ${product.name} (${product.sku})`);
@@ -859,17 +859,17 @@ export async function incrementalSync(
     
     if (productChanges.success && productChanges.products) {
       for (const product of productChanges.products) {
-        // Si el producto está inactivo, eliminarlo
+        // Si el producto está inactivo, eliminarlo (por SKU para mayor confiabilidad)
         if (!product.isActive) {
-          await db.runAsync('DELETE FROM products WHERE id = ?', [product.id]);
+          await db.runAsync('DELETE FROM products WHERE sku = ?', [product.sku]);
           productsUpdated++;
           continue;
         }
         
-        // Verificar si la imagen cambió
+        // Verificar si la imagen cambió (buscar por SKU)
         const existingProduct = await db.getAllAsync<any>(
-          'SELECT image, updatedAt FROM products WHERE id = ?',
-          [product.id]
+          'SELECT image, updatedAt FROM products WHERE sku = ?',
+          [product.sku]
         );
         
         const imageChanged = existingProduct.length === 0 || 
