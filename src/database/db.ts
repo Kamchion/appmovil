@@ -594,6 +594,23 @@ export async function clearDatabase(): Promise<void> {
 }
 
 /**
+ * Limpia solo las tablas de productos y clientes
+ * Preserva el historial de pedidos y el carrito
+ * Útil para re-sincronizar catálogo sin perder datos de pedidos
+ */
+export async function clearProductsAndClients(): Promise<void> {
+  const database = getDatabase();
+  
+  await database.execAsync(`
+    DELETE FROM pricing_by_type;
+    DELETE FROM products;
+    DELETE FROM clients;
+  `);
+  
+  console.log('✅ Productos y clientes eliminados (historial y carrito preservados)');
+}
+
+/**
  * Elimina completamente la base de datos y la recrea
  * Útil para resolver problemas de corrupción
  */
