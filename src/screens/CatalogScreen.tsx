@@ -113,19 +113,25 @@ const VariantItem = ({
 
   return (
     <View style={styles.variantItem}>
-      {imagePath && (
-        <Image 
-          source={{ uri: imagePath }} 
-          style={styles.variantImage} 
-        />
-      )}
-      <View style={styles.variantInfo}>
-        <Text style={styles.variantName}>{variant.variantName || variant.name}</Text>
-        <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
-        <Text style={styles.variantPrice}>{displayPrice}</Text>
-        <Text style={styles.variantStock}>Stock: {variant.stock || 0}</Text>
-        
-        {/* Campos personalizados en fila horizontal */}
+      {/* Lado Izquierdo: Imagen + Info */}
+      <View style={styles.variantLeftSection}>
+        {imagePath && (
+          <Image 
+            source={{ uri: imagePath }} 
+            style={styles.variantImage} 
+          />
+        )}
+        <View style={styles.variantInfo}>
+          <Text style={styles.variantName}>{variant.variantName || variant.name}</Text>
+          <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
+          <Text style={styles.variantPrice}>{displayPrice}</Text>
+          <Text style={styles.variantStock}>Stock: {variant.stock || 0}</Text>
+        </View>
+      </View>
+      
+      {/* Lado Derecho: Campos + Cantidad */}
+      <View style={styles.variantRightSection}>
+        {/* Fila 1: Campos Personalizados */}
         {(productFields.some(f => f.field === 'customText') || productFields.some(f => f.field === 'customSelect')) && (
           <View style={styles.variantCustomFieldsRow}>
             {productFields.some(f => f.field === 'customText') && (
@@ -157,6 +163,29 @@ const VariantItem = ({
             )}
           </View>
         )}
+        
+        {/* Fila 2: Cantidad */}
+        <View style={styles.variantQuantityContainer}>
+          <TouchableOpacity
+            style={styles.variantQuantityButton}
+            onPress={decrementQuantity}
+          >
+            <Ionicons name="remove" size={16} color="#64748b" />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.variantQuantityInput}
+            value={quantity > 0 ? quantity.toString() : ''}
+            onChangeText={handleQuantityChange}
+            keyboardType="numeric"
+            placeholder="0"
+          />
+          <TouchableOpacity
+            style={styles.variantQuantityButton}
+            onPress={incrementQuantity}
+          >
+            <Ionicons name="add" size={16} color="#64748b" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Modal para editar customText */}
@@ -197,30 +226,6 @@ const VariantItem = ({
           </View>
         </View>
       </Modal>
-      
-      <View style={styles.variantControls}>
-        <View style={styles.variantQuantityContainer}>
-          <TouchableOpacity
-            style={styles.variantQuantityButton}
-            onPress={decrementQuantity}
-          >
-            <Ionicons name="remove" size={16} color="#64748b" />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.variantQuantityInput}
-            value={quantity > 0 ? quantity.toString() : ''}
-            onChangeText={handleQuantityChange}
-            keyboardType="numeric"
-            placeholder="0"
-          />
-          <TouchableOpacity
-            style={styles.variantQuantityButton}
-            onPress={incrementQuantity}
-          >
-            <Ionicons name="add" size={16} color="#64748b" />
-          </TouchableOpacity>
-        </View>
-      </View>
     </View>
   );
 };
@@ -1899,11 +1904,20 @@ const styles = StyleSheet.create({
   },
   variantItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+  },
+  variantLeftSection: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  variantRightSection: {
+    width: 240,
+    gap: 8,
+    alignItems: 'flex-end',
   },
   variantImage: {
     width: 60,
@@ -1914,6 +1928,7 @@ const styles = StyleSheet.create({
   },
   variantInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   variantName: {
     fontSize: 14,
@@ -1935,20 +1950,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
   },
-  variantControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+
   variantQuantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 6,
-    paddingHorizontal: 4,
+    gap: 8,
+    alignSelf: 'center',
   },
   variantQuantityButton: {
-    padding: 6,
+    width: 40,
+    height: 36,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
   },
   variantQuantityText: {
     fontSize: 14,
@@ -1958,16 +1975,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   variantQuantityInput: {
+    width: 40,
+    height: 36,
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
-    minWidth: 50,
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#e2e8f0',
     borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
     backgroundColor: '#ffffff',
   },
   variantAddButton: {
@@ -2092,16 +2108,15 @@ const styles = StyleSheet.create({
   variantCustomFieldsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 6,
+    width: '100%',
   },
   variantCustomTextCompact: {
-    flex: 1,
-    height: 24,
+    width: 100,
+    height: 36,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 4,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 4,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
   },
@@ -2110,11 +2125,11 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
   },
   variantCustomSelectCompact: {
-    flex: 1,
-    height: 24,
+    width: 100,
+    height: 36,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 4,
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
     backgroundColor: '#ffffff',
     overflow: 'hidden',
     justifyContent: 'center',
