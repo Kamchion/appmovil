@@ -94,10 +94,12 @@ export default function DashboardHomeScreen() {
         {
           text: 'Continuar',
           onPress: async () => {
-            setIsSyncing(true);
-            setSyncMessage('Descargando todo el catálogo...');
+            // Pequeño delay para asegurar que el Alert se cierre y React re-renderice
+            setTimeout(async () => {
+              setIsSyncing(true);
+              setSyncMessage('Descargando todo el catálogo...');
 
-            try {
+              try {
               const result = await fullSync((message) => {
                 setSyncMessage(message);
               });
@@ -125,6 +127,7 @@ export default function DashboardHomeScreen() {
               setIsSyncing(false);
               setSyncMessage('');
             }
+            }, 300); // 300ms delay
           },
         },
       ]
