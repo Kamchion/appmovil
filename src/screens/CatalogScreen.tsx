@@ -769,7 +769,6 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showSortMenu, setShowSortMenu] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
   // Actualizar número de columnas si cambia el tamaño de pantalla
@@ -1097,12 +1096,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             <Text style={styles.topBarCartText}>{cartCount.lines} líneas</Text>
             <Text style={styles.topBarCartText}>{cartTotal}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.topBarMenuButton}
-            onPress={() => setShowSortMenu(!showSortMenu)}
-          >
-            <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
-          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.topBarCartButton}
             onPress={() => navigation.navigate('Cart')}
@@ -1112,29 +1106,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         </View>
       </View>
 
-      {/* Menú de Ordenamiento */}
-      {showSortMenu && (
-        <View style={styles.sortMenuContainer}>
-          <TouchableOpacity
-            style={styles.sortMenuItem}
-            onPress={async () => {
-              setShowSortMenu(false);
-              setRefreshing(true);
-              try {
-                await loadProducts();
-                Alert.alert('✅ Éxito', 'Productos reordenados correctamente');
-              } catch (error) {
-                Alert.alert('❌ Error', 'No se pudo reordenar: ' + (error as Error).message);
-              } finally {
-                setRefreshing(false);
-              }
-            }}
-          >
-            <Ionicons name="swap-vertical" size={20} color="#2563eb" />
-            <Text style={styles.sortMenuItemText}>Reordenar productos</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
 
       {/* Barra de Búsqueda y Categorías */}
       <View style={styles.searchBar}>
