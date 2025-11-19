@@ -10,6 +10,7 @@ import {
   ScrollView,
   Image,
   SafeAreaView,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -143,6 +144,8 @@ export default function CartScreen({ navigation }: CartScreenProps) {
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [customerNote, setCustomerNote] = useState('');
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
 
   useEffect(() => {
     loadCart();
@@ -326,94 +329,79 @@ export default function CartScreen({ navigation }: CartScreenProps) {
       return;
     }
 
-    // Mostrar diálogo para escribir mensaje personalizado
-    Alert.prompt(
-      'Enviar PDF por Correo',
-      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nEmail: ${selectedClient.email}\nTotal: $${total.toFixed(2)}\n\nEscribe un mensaje personalizado (opcional):`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Enviar',
-          onPress: async (customMessage) => {
-            setLoading(true);
-            try {
-              const { sendPDFEmail } = require('../services/api');
-              const { getDatabase } = require('../database/db');
-              const { generateSentOrderNumber } = require('../utils/orderNumber');
-              
-              // Preparar items del pedido
-              const items = cart.map(item => {
-                const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
-                const correctPrice = getProductPrice(item.product, priceType);
-                return {
-                  productId: item.product.id,
-                  productName: item.product.name,
-                  quantity: item.quantity,
-                  pricePerUnit: parseFloat(correctPrice),
-                  subtotal: parseFloat(correctPrice) * item.quantity,
-                  customText: item.customText,
-                  customSelect: item.customSelect,
-                };
-              });
+    // Mostrar modal para escribir mensaje personalizado
+    setCustomMessage('');
+    setShowMessageModal(true);
+  };
 
-              // Enviar PDF por correo
-              await sendPDFEmail({
-                clientId: selectedClient.id.toString(),
-                clientEmail: selectedClient.email,
-                clientName: selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
-                items,
-                subtotal,
-                tax,
-                total,
-                customerNote: customerNote || '',
-                customMessage: customMessage || '',
-              });
+  const handleConfirmSendPDF = async () => {
+    setShowMessageModal(false);
+    setLoading(true);
+    try {
+      const { sendPDFEmail } = require('../services/api');
+      const { getDatabase } = require('../database/db');
+      const { generateSentOrderNumber } = require('../utils/orderNumber');
+      
+      // Preparar items del pedido
+      const items = cart.map(item => {
+        const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+        const correctPrice = getProductPrice(item.product, priceType);
+        return {
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          pricePerUnit: parseFloat(correctPrice),
+          subtotal: parseFloat(correctPrice) * item.quantity,
+          customText: item.customText,
+          customSelect: item.customSelect,
+        };
+      });
 
-              // Guardar como borrador en la base de datos local
-              const db = getDatabase();
-              const now = new Date().toISOString();
-              const orderId = await generateSentOrderNumber();
+      // Enviar PDF por correo
+      await sendPDFEmail({
+        clientId: selectedClient.id.toString(),
+        clientEmail: selectedClient.email,
+        clientName: selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
+        items,
+        subtotal,
+        tax,
+        total,
+        customerNote: customerNote || '',
+        customMessage: customMessage || '',
+      });
 
-              await db.runAsync(
-                `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
-              );
+      // Guardar como borrador en la base de datos local
+      const db = getDatabase();
+      const now = new Date().toISOString();
+      const orderId = await generateSentOrderNumber();
 
-              // Guardar items del pedido
-              for (const item of cart) {
-                const itemId = `${orderId}-${item.product.id}`;
-                const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
-                const correctPrice = getProductPrice(item.product, priceType);
-                const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
-                
-                await db.runAsync(
-                  `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
-                );
-              }
+      await db.runAsync(
+        `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
+      );
 
-              // Limpiar carrito y cliente seleccionado
-              await clearCart();
-              await AsyncStorage.removeItem('selectedClientId');
-              await AsyncStorage.removeItem('selectedClientData');
-              await AsyncStorage.removeItem('editingOrderId');
+      // Guardar items del pedido
+      for (const item of items) {
+        await db.runAsync(
+          `INSERT INTO pending_order_items (orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [orderId, item.productId, item.productName, item.quantity, item.pricePerUnit.toString(), item.subtotal.toString(), item.customText || '', item.customSelect || '']
+        );
+      }
 
-              Alert.alert(
-                'PDF Enviado',
-                `El PDF ha sido enviado a ${selectedClient.email} y guardado como borrador.`,
-                [{ text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] }) }]
-              );
-            } catch (error: any) {
-              console.error('❌ Error al enviar PDF:', error);
-              Alert.alert('Error', 'No se pudo enviar el PDF: ' + error.message);
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ],
-      'plain-text'
-    );
+      Alert.alert('Éxito', 'PDF enviado correctamente y pedido guardado como borrador');
+      
+      // Limpiar carrito y navegar
+      await clearCart();
+      setCart([]);
+      setCustomerNote('');
+      setCustomMessage('');
+      navigation.navigate('OrdersTab');
+    } catch (error: any) {
+      console.error('Error al enviar PDF:', error);
+      Alert.alert('Error', 'No se pudo enviar el PDF: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCheckout = async () => {
@@ -677,6 +665,67 @@ export default function CartScreen({ navigation }: CartScreenProps) {
         {/* Espacio al final para scroll */}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal para mensaje personalizado */}
+      <Modal
+        visible={showMessageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMessageModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enviar PDF por Correo</Text>
+            
+            <View style={styles.modalInfo}>
+              <Text style={styles.modalInfoLabel}>Cliente:</Text>
+              <Text style={styles.modalInfoValue}>
+                {selectedClient?.companyName || selectedClient?.contactPerson}
+              </Text>
+            </View>
+            
+            <View style={styles.modalInfo}>
+              <Text style={styles.modalInfoLabel}>Email:</Text>
+              <Text style={styles.modalInfoValue}>{selectedClient?.email}</Text>
+            </View>
+            
+            <View style={styles.modalInfo}>
+              <Text style={styles.modalInfoLabel}>Total:</Text>
+              <Text style={styles.modalInfoValue}>${total.toFixed(2)}</Text>
+            </View>
+            
+            <Text style={styles.modalInputLabel}>Mensaje personalizado (opcional):</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={customMessage}
+              onChangeText={setCustomMessage}
+              placeholder="Escribe un mensaje para el cliente..."
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowMessageModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleConfirmSendPDF}
+              >
+                <Ionicons name="send" size={18} color="#ffffff" />
+                <Text style={[styles.modalButtonText, { color: '#ffffff', marginLeft: 8 }]}>
+                  Enviar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -983,5 +1032,90 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  // Estilos del modal de mensaje personalizado
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalInfo: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  modalInfoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+    width: 70,
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    color: '#1e293b',
+    flex: 1,
+  },
+  modalInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1e293b',
+    minHeight: 100,
+    backgroundColor: '#f8fafc',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#10b981',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });
