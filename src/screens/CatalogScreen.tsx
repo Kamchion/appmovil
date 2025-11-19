@@ -867,23 +867,13 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
       }
       
       // OPTIMIZACIÓN: Consulta SQL optimizada que filtra directamente en la base de datos
-      // Usar subconsulta para garantizar que ORDER BY se respete correctamente
+      // Aplicar ORDER BY al final de toda la consulta para garantizar ordenamiento correcto
       const result = await db.getAllAsync<any>(
         `SELECT 
           p.*,
           COALESCE(v.variantCount, 0) as variantCount,
-          COALESCE(v.visibleVariantCount, 0) as visibleVariantCount,
-          0 as hideInCatalog
-         FROM (
-           SELECT *
-           FROM products
-           WHERE isActive = 1 
-           AND (parentSku IS NULL OR parentSku = '')
-           ORDER BY 
-             CASE WHEN displayOrder IS NULL THEN 0 ELSE 1 END,
-             displayOrder ASC, 
-             name ASC
-         ) p
+          COALESCE(v.visibleVariantCount, 0) as visibleVariantCount
+         FROM products p
          LEFT JOIN (
            SELECT 
              parentSku,
@@ -893,10 +883,16 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
            WHERE isActive = 1 AND parentSku IS NOT NULL AND parentSku != ''
            GROUP BY parentSku
          ) v ON v.parentSku = p.sku
-         WHERE (
-           (v.variantCount > 0 AND v.visibleVariantCount > 0)
-           OR (v.variantCount IS NULL AND p.hideInCatalog = 0)
-         )`
+         WHERE p.isActive = 1 
+           AND (p.parentSku IS NULL OR p.parentSku = '')
+           AND (
+             (v.variantCount > 0 AND v.visibleVariantCount > 0)
+             OR (v.variantCount IS NULL AND p.hideInCatalog = 0)
+           )
+         ORDER BY 
+           CASE WHEN p.displayOrder IS NULL THEN 0 ELSE 1 END,
+           p.displayOrder ASC, 
+           p.name ASC`
       );
       
       console.log(`✅ ${result.length} productos visibles cargados`);
