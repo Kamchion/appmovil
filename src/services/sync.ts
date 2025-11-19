@@ -107,7 +107,7 @@ export async function syncCatalog(
           continue;
         }
         
-        // Si está activo, guardarlo o actualizarlo
+        // Si está activo, guardarlo o actualizarlo (usar sku como id)
       await db.runAsync(
         `INSERT OR REPLACE INTO products 
          (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, isActive,
@@ -115,7 +115,7 @@ export async function syncCatalog(
           location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          product.id,
+          product.sku,
           product.sku,
           product.name,
           product.description || null,
@@ -147,7 +147,7 @@ export async function syncCatalog(
       );
         savedCount++;
       } catch (insertError) {
-        console.error(`❌ Error al guardar producto ${product.id}:`, insertError);
+        console.error(`❌ Error al guardar producto ${product.sku}:`, insertError);
         console.error('Datos del producto:', JSON.stringify(product, null, 2));
       }
     }
@@ -876,7 +876,7 @@ export async function incrementalSync(
                             existingProduct[0].image !== product.image ||
                             existingProduct[0].updatedAt !== product.updatedAt;
         
-        // Actualizar producto
+        // Actualizar producto (usar sku como id para evitar duplicados)
         await db.runAsync(
           `INSERT OR REPLACE INTO products 
            (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, 
@@ -884,7 +884,7 @@ export async function incrementalSync(
             location, unitsPerBox, hideInCatalog, customText, customSelect, createdAt, updatedAt, syncedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            product.id,
+            product.sku,
             product.sku,
             product.name,
             product.description || null,
