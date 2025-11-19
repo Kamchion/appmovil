@@ -769,6 +769,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
   // Actualizar número de columnas si cambia el tamaño de pantalla
@@ -1069,6 +1070,12 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             <Text style={styles.topBarCartText}>{cartTotal}</Text>
           </View>
           <TouchableOpacity
+            style={styles.topBarMenuButton}
+            onPress={() => setShowSortMenu(!showSortMenu)}
+          >
+            <Ionicons name="ellipsis-vertical" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.topBarCartButton}
             onPress={() => navigation.navigate('Cart')}
           >
@@ -1076,6 +1083,22 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Menú de Ordenamiento */}
+      {showSortMenu && (
+        <View style={styles.sortMenuContainer}>
+          <TouchableOpacity
+            style={styles.sortMenuItem}
+            onPress={async () => {
+              setShowSortMenu(false);
+              await loadProducts();
+            }}
+          >
+            <Ionicons name="swap-vertical" size={20} color="#2563eb" />
+            <Text style={styles.sortMenuItemText}>Ordenar productos</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Barra de Búsqueda y Categorías */}
       <View style={styles.searchBar}>
@@ -1225,6 +1248,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '500',
   },
+  topBarMenuButton: {
+    padding: 4,
+    marginRight: 8,
+  },
   topBarCartButton: {
     position: 'relative',
     padding: 4,
@@ -1245,6 +1272,30 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  sortMenuContainer: {
+    position: 'absolute',
+    top: 56,
+    right: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+    minWidth: 200,
+  },
+  sortMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  sortMenuItemText: {
+    fontSize: 16,
+    color: '#1f2937',
   },
   searchBar: {
     backgroundColor: '#ffffff',
