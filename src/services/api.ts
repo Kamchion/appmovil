@@ -465,3 +465,32 @@ export async function getProductFieldsVendor(): Promise<any[]> {
 export async function getCardStyles(): Promise<any> {
   return await trpcQuery<any>('config.getCardStyles');
 }
+
+/**
+ * Envía el PDF del pedido por correo al cliente
+ */
+export async function sendPDFEmail(params: {
+  clientId: string;
+  clientEmail: string;
+  clientName: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    pricePerUnit: number;
+    subtotal: number;
+    customText?: string;
+    customSelect?: string;
+  }>;
+  subtotal: number;
+  tax: number;
+  total: number;
+  customerNote?: string;
+  customMessage?: string;
+}): Promise<{
+  success: boolean;
+  orderNumber: string;
+  message: string;
+}> {
+  return await trpcMutation('orders.sendPDFEmail', params);
+}

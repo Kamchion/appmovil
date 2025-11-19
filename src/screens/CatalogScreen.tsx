@@ -51,12 +51,22 @@ const VariantItem = ({
   variant, 
   priceType, 
   quantity,
-  onQuantityChange 
+  onQuantityChange,
+  customText,
+  customSelect,
+  onCustomTextChange,
+  onCustomSelectChange,
+  productFields
 }: { 
   variant: Product; 
   priceType?: string; 
   quantity: number;
   onQuantityChange: (variantId: string, qty: number) => void;
+  customText: string;
+  customSelect: string;
+  onCustomTextChange: (variantId: string, text: string) => void;
+  onCustomSelectChange: (variantId: string, value: string) => void;
+  productFields: any[];
 }) => {
   // Validación defensiva
   if (!variant || !variant.id || !variant.sku || !variant.name) {
@@ -65,6 +75,8 @@ const VariantItem = ({
   }
   
   const [imagePath, setImagePath] = useState<string | null>(null);
+  const [showCustomTextModal, setShowCustomTextModal] = useState(false);
+  const [tempCustomText, setTempCustomText] = useState('');
   const displayPrice = getProductPrice(variant, (priceType as PriceType) || 'ciudad');
   
   // Cargar imagen de la variante
@@ -112,7 +124,80 @@ const VariantItem = ({
         <Text style={styles.variantSku}>SKU: {variant.sku}</Text>
         <Text style={styles.variantPrice}>{displayPrice}</Text>
         <Text style={styles.variantStock}>Stock: {variant.stock || 0}</Text>
+        
+        {/* Campos personalizados en fila horizontal */}
+        {(productFields.some(f => f.field === 'customText') || productFields.some(f => f.field === 'customSelect')) && (
+          <View style={styles.variantCustomFieldsRow}>
+            {productFields.some(f => f.field === 'customText') && (
+              <TouchableOpacity 
+                style={styles.variantCustomTextCompact}
+                onPress={() => {
+                  setTempCustomText(customText);
+                  setShowCustomTextModal(true);
+                }}
+              >
+                <Text style={styles.variantCustomTextPlaceholder}>
+                  {customText || 'Texto'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {productFields.some(f => f.field === 'customSelect') && (
+              <View style={styles.variantCustomSelectCompact}>
+                <Picker
+                  selectedValue={customSelect}
+                  onValueChange={(itemValue) => onCustomSelectChange(variant.id, itemValue)}
+                  style={styles.variantPickerStyle}
+                >
+                  <Picker.Item label="Texto" value="" />
+                  {(productFields.find(f => f.field === 'customSelect')?.options || []).map((opt: string) => (
+                    <Picker.Item key={opt} label={opt} value={opt} />
+                  ))}
+                </Picker>
+              </View>
+            )}
+          </View>
+        )}
       </View>
+      
+      {/* Modal para editar customText */}
+      <Modal
+        visible={showCustomTextModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCustomTextModal(false)}
+      >
+        <View style={styles.customTextModalOverlay}>
+          <View style={styles.customTextModalContent}>
+            <Text style={styles.customTextModalTitle}>Texto Personalizado</Text>
+            <TextInput
+              style={styles.customTextModalInput}
+              value={tempCustomText}
+              onChangeText={setTempCustomText}
+              placeholder="Ingrese texto personalizado"
+              multiline
+              numberOfLines={3}
+            />
+            <View style={styles.customTextModalButtons}>
+              <TouchableOpacity
+                style={[styles.customTextModalButton, styles.customTextModalButtonCancel]}
+                onPress={() => setShowCustomTextModal(false)}
+              >
+                <Text style={styles.customTextModalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.customTextModalButton, styles.customTextModalButtonSave]}
+                onPress={() => {
+                  onCustomTextChange(variant.id, tempCustomText);
+                  setShowCustomTextModal(false);
+                }}
+              >
+                <Text style={[styles.customTextModalButtonText, { color: '#fff' }]}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
       <View style={styles.variantControls}>
         <View style={styles.variantQuantityContainer}>
           <TouchableOpacity
@@ -152,6 +237,9 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   const [adding, setAdding] = useState(false);
   // Estado para cantidades de variantes (key: variantId, value: quantity)
   const [variantQuantities, setVariantQuantities] = useState<Record<string, number>>({});
+  // Estados para campos personalizados de cada variante
+  const [variantCustomTexts, setVariantCustomTexts] = useState<Record<string, string>>({});
+  const [variantCustomSelects, setVariantCustomSelects] = useState<Record<string, string>>({});
   // Estados para configuración dinámica de campos
   const [productFields, setProductFields] = useState<any[]>([]);
   const [cardStyles, setCardStyles] = useState<any>(null);
@@ -554,10 +642,25 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                     variant={variant}
                     priceType={priceType}
                     quantity={variantQuantities[variant.id] || 0}
+                    customText={variantCustomTexts[variant.id] || ''}
+                    customSelect={variantCustomSelects[variant.id] || ''}
+                    productFields={productFields}
                     onQuantityChange={(variantId, qty) => {
                       setVariantQuantities(prev => ({
                         ...prev,
                         [variantId]: qty
+                      }));
+                    }}
+                    onCustomTextChange={(variantId, text) => {
+                      setVariantCustomTexts(prev => ({
+                        ...prev,
+                        [variantId]: text
+                      }));
+                    }}
+                    onCustomSelectChange={(variantId, value) => {
+                      setVariantCustomSelects(prev => ({
+                        ...prev,
+                        [variantId]: value
                       }));
                     }}
                   />
@@ -581,11 +684,15 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
                             ...variant,
                             price: getProductPrice(variant, (priceType as PriceType) || 'ciudad').toString(),
                           };
-                          await addToCart(productWithPrice, qty);
+                          const customText = variantCustomTexts[variant.id] || '';
+                          const customSelect = variantCustomSelects[variant.id] || '';
+                          await addToCart(productWithPrice, qty, customText, customSelect);
                         }
                       }
-                      // Limpiar cantidades y cerrar modal
+                      // Limpiar cantidades y campos personalizados, cerrar modal
                       setVariantQuantities({});
+                      setVariantCustomTexts({});
+                      setVariantCustomSelects({});
                       setShowVariantsModal(false);
                       if (onAddToCart) onAddToCart();
                     } catch (error) {
@@ -1980,5 +2087,43 @@ const styles = StyleSheet.create({
   },
   customTextModalButtonTextConfirm: {
     color: '#ffffff',
+  },
+  // Estilos para campos personalizados de variantes
+  variantCustomFieldsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  variantCustomTextCompact: {
+    flex: 1,
+    height: 24,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+  },
+  variantCustomTextPlaceholder: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  variantCustomSelectCompact: {
+    flex: 1,
+    height: 24,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  variantPickerStyle: {
+    height: 24,
+    fontSize: 11,
+  },
+  customTextModalButtonSave: {
+    backgroundColor: '#3b82f6',
   },
 });

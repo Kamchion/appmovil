@@ -307,6 +307,115 @@ export default function CartScreen({ navigation }: CartScreenProps) {
     );
   };
 
+  const handleSendPDF = async () => {
+    if (cart.length === 0) {
+      Alert.alert('Carrito vacío', 'No hay productos en el carrito');
+      return;
+    }
+
+    if (!selectedClient) {
+      Alert.alert('Cliente no asignado', '¿Deseas asignar un cliente a este pedido?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Asignar Cliente', onPress: () => navigation.navigate('Pedidos') }
+      ]);
+      return;
+    }
+
+    if (!selectedClient.email || selectedClient.email === 'sin-email@example.com') {
+      Alert.alert('Email no disponible', 'El cliente no tiene un correo electrónico registrado.');
+      return;
+    }
+
+    // Mostrar diálogo para escribir mensaje personalizado
+    Alert.prompt(
+      'Enviar PDF por Correo',
+      `Cliente: ${selectedClient.companyName || selectedClient.contactPerson}\nEmail: ${selectedClient.email}\nTotal: $${total.toFixed(2)}\n\nEscribe un mensaje personalizado (opcional):`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Enviar',
+          onPress: async (customMessage) => {
+            setLoading(true);
+            try {
+              const { sendPDFEmail } = require('../services/api');
+              const { getDatabase } = require('../database/db');
+              const { generateSentOrderNumber } = require('../utils/orderNumber');
+              
+              // Preparar items del pedido
+              const items = cart.map(item => {
+                const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                const correctPrice = getProductPrice(item.product, priceType);
+                return {
+                  productId: item.product.id,
+                  productName: item.product.name,
+                  quantity: item.quantity,
+                  pricePerUnit: parseFloat(correctPrice),
+                  subtotal: parseFloat(correctPrice) * item.quantity,
+                  customText: item.customText,
+                  customSelect: item.customSelect,
+                };
+              });
+
+              // Enviar PDF por correo
+              await sendPDFEmail({
+                clientId: selectedClient.id.toString(),
+                clientEmail: selectedClient.email,
+                clientName: selectedClient.companyName || selectedClient.contactPerson || 'Cliente',
+                items,
+                subtotal,
+                tax,
+                total,
+                customerNote: customerNote || '',
+                customMessage: customMessage || '',
+              });
+
+              // Guardar como borrador en la base de datos local
+              const db = getDatabase();
+              const now = new Date().toISOString();
+              const orderId = await generateSentOrderNumber();
+
+              await db.runAsync(
+                `INSERT INTO pending_orders (id, clientId, orderNumber, customerName, customerNote, subtotal, tax, total, status, createdAt, synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+                [orderId, selectedClient.id.toString(), orderId, selectedClient.companyName || selectedClient.contactPerson || 'Cliente', customerNote || '', subtotal.toString(), tax.toString(), total.toString(), 'draft', now]
+              );
+
+              // Guardar items del pedido
+              for (const item of cart) {
+                const itemId = `${orderId}-${item.product.id}`;
+                const priceType = (selectedClient?.priceType || 'ciudad') as PriceType;
+                const correctPrice = getProductPrice(item.product, priceType);
+                const itemSubtotal = (parseFloat(correctPrice) * item.quantity).toString();
+                
+                await db.runAsync(
+                  `INSERT INTO pending_order_items (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [itemId, orderId, item.product.id, item.product.name, item.quantity, correctPrice, itemSubtotal, item.customText || null, item.customSelect || null]
+                );
+              }
+
+              // Limpiar carrito y cliente seleccionado
+              await clearCart();
+              await AsyncStorage.removeItem('selectedClientId');
+              await AsyncStorage.removeItem('selectedClientData');
+              await AsyncStorage.removeItem('editingOrderId');
+
+              Alert.alert(
+                'PDF Enviado',
+                `El PDF ha sido enviado a ${selectedClient.email} y guardado como borrador.`,
+                [{ text: 'OK', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'DashboardHome' }] }) }]
+              );
+            } catch (error: any) {
+              console.error('❌ Error al enviar PDF:', error);
+              Alert.alert('Error', 'No se pudo enviar el PDF: ' + error.message);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ],
+      'plain-text'
+    );
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       Alert.alert('Carrito vacío', 'Agrega productos antes de realizar el pedido');
@@ -543,6 +652,16 @@ export default function CartScreen({ navigation }: CartScreenProps) {
             >
               <Ionicons name="save-outline" size={18} color="#2563eb" />
               <Text style={styles.saveButtonText}>GUARDAR SIN ENVIAR</Text>
+            </TouchableOpacity>
+
+            {/* Enviar PDF */}
+            <TouchableOpacity
+              style={styles.sendPDFButton}
+              onPress={handleSendPDF}
+              disabled={loading}
+            >
+              <Ionicons name="mail-outline" size={18} color="#10b981" />
+              <Text style={styles.sendPDFButtonText}>ENVIAR PDF</Text>
             </TouchableOpacity>
 
             {/* Seguir Comprando */}
@@ -804,6 +923,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#2563eb',
+    letterSpacing: 0.5,
+  },
+  sendPDFButton: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#10b981',
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  sendPDFButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#10b981',
     letterSpacing: 0.5,
   },
   continueShoppingButton: {
