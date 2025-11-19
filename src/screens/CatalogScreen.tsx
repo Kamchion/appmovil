@@ -871,7 +871,9 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
           p.*,
           COUNT(v.id) as variantCount,
           SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount,
-          0 as hideInCatalog
+          0 as hideInCatalog,
+          p.displayOrder,
+          p.name
          FROM products p
          LEFT JOIN products v ON v.parentSku = p.sku AND v.isActive = 1
          WHERE p.isActive = 1 
@@ -879,7 +881,7 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
          AND (
            p.id || p.sku || p.name
          ) IS NOT NULL
-         GROUP BY p.sku
+         GROUP BY p.sku, p.displayOrder, p.name
          HAVING (
            (COUNT(v.id) > 0 AND SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) > 0)
            OR (COUNT(v.id) = 0 AND p.hideInCatalog = 0)
