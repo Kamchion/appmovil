@@ -349,6 +349,7 @@ export default function CartScreen({ navigation }: CartScreenProps) {
         return {
           productId: item.product.id,
           productName: item.product.name,
+          sku: item.product.sku,
           quantity: item.quantity,
           pricePerUnit: parseFloat(correctPrice),
           subtotal: parseFloat(correctPrice) * item.quantity,

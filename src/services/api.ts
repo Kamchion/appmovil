@@ -476,6 +476,7 @@ export async function sendPDFEmail(params: {
   items: Array<{
     productId: string;
     productName: string;
+    sku?: string;
     quantity: number;
     pricePerUnit: number;
     subtotal: number;
