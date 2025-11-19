@@ -211,17 +211,6 @@ export default function DashboardHomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Sync Progress Message - Visible en el panel principal */}
-        {isSyncing && (
-          <View style={styles.syncProgressCard}>
-            <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.syncProgressTitle}>Sincronizando...</Text>
-            <Text style={styles.syncProgressMessage}>
-              {syncMessage || 'Por favor espera'}
-            </Text>
-          </View>
-        )}
-
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Panel de Vendedor</Text>
           <Text style={styles.headerSubtitle}>
@@ -319,35 +308,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  syncProgressCard: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: '#2563eb',
-  },
-  syncProgressTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  syncProgressMessage: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-  },
+
   scrollContent: {
     padding: 20,
   },
