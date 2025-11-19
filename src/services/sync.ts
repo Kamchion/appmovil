@@ -791,6 +791,9 @@ export async function incrementalSync(
     const db = getDatabase();
     const lastSync = await getLastSyncTimestamp();
     
+    console.log('🔄 [incrementalSync] Iniciando sincronización incremental');
+    console.log('🕒 [incrementalSync] lastSync:', lastSync);
+    
     if (!lastSync) {
       // Si no hay sincronización previa, hacer fullSync
       onProgress?.('Primera sincronización, descargando todo...');
@@ -872,7 +875,13 @@ export async function incrementalSync(
     
     // 3. Descargar cambios en productos
     onProgress?.('Descargando cambios en catálogo...');
+    console.log('📦 [incrementalSync] Solicitando cambios desde:', lastSync);
     const productChanges = await getChanges(lastSync);
+    console.log('📦 [incrementalSync] Respuesta del servidor:', {
+      success: productChanges.success,
+      productsCount: productChanges.products?.length || 0,
+      timestamp: productChanges.timestamp
+    });
     
     let productsUpdated = 0;
     let imagesDownloaded = 0;
@@ -887,16 +896,47 @@ export async function incrementalSync(
           continue;
         }
         
-        // Verificar si la imagen cambió (solo comparar URL de imagen)
+        // Verificar si el producto existe y si realmente cambió
         const existingProduct = await db.getAllAsync<any>(
-          'SELECT image FROM products WHERE sku = ?',
+          'SELECT * FROM products WHERE sku = ?',
           [product.sku]
         );
         
-        const imageChanged = existingProduct.length === 0 || 
-                            existingProduct[0].image !== product.image;
+        const isNewProduct = existingProduct.length === 0;
+        let hasChanges = isNewProduct;
+        let imageChanged = isNewProduct;
         
-        // Actualizar producto (usar sku como id para evitar duplicados)
+        if (!isNewProduct) {
+          const existing = existingProduct[0];
+          
+          // Comparar campos clave para detectar cambios reales
+          hasChanges = 
+            existing.name !== product.name ||
+            existing.description !== (product.description || null) ||
+            existing.category !== (product.category || null) ||
+            existing.subcategory !== (product.subcategory || null) ||
+            existing.image !== (product.image || null) ||
+            existing.basePrice !== product.basePrice ||
+            existing.priceCity !== (product.priceCity || product.basePrice) ||
+            existing.priceInterior !== (product.priceInterior || product.basePrice) ||
+            existing.priceSpecial !== (product.priceSpecial || product.basePrice) ||
+            existing.stock !== (product.stock || 0) ||
+            existing.displayOrder !== (product.displayOrder || null) ||
+            existing.hideInCatalog !== (product.hideInCatalog ? 1 : 0);
+          
+          imageChanged = existing.image !== (product.image || null);
+          
+          if (!hasChanges) {
+            console.log(`✅ Sin cambios: ${product.name} (${product.sku})`);
+            continue; // Saltar actualización si no hay cambios
+          }
+          
+          console.log(`🔄 Actualizando producto: ${product.name} (${product.sku})`);
+        } else {
+          console.log(`✨ Nuevo producto: ${product.name} (${product.sku})`);
+        }
+        
+        // Actualizar producto solo si hay cambios (usar sku como id para evitar duplicados)
         await db.runAsync(
           `INSERT OR REPLACE INTO products 
            (id, sku, name, description, category, subcategory, image, basePrice, priceCity, priceInterior, priceSpecial, stock, 
@@ -1073,7 +1113,11 @@ export async function incrementalSync(
       : new Date().toISOString();
     
     await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
-    console.log('✅ Timestamp de sincronización actualizado:', newSyncTimestamp);
+    console.log('✅ [incrementalSync] Timestamp actualizado:', {
+      anterior: lastSync,
+      nuevo: newSyncTimestamp,
+      serverTimestamp: serverTimestamp > 0 ? new Date(serverTimestamp).toISOString() : 'N/A'
+    });
     
     const message = `${productsUpdated} productos, ${clientsUpdated} clientes, ${imagesDownloaded} imágenes actualizadas`;
     
