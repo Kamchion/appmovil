@@ -241,6 +241,17 @@ export default function DashboardHomeScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* Sync Progress Modal */}
+      {isSyncing && syncMessage && (
+        <View style={styles.syncProgressOverlay}>
+          <View style={styles.syncProgressModal}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.syncProgressTitle}>Sincronizando...</Text>
+            <Text style={styles.syncProgressMessage}>{syncMessage}</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -364,6 +375,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  syncProgressOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  syncProgressModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    minWidth: 280,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  syncProgressTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  syncProgressMessage: {
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
