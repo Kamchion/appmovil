@@ -93,8 +93,15 @@ export async function syncCatalog(
     // Guardar, actualizar o eliminar productos en la base de datos local
     let savedCount = 0;
     let deletedCount = 0;
+    const totalProducts = response.products.length;
     
-    for (const product of response.products) {
+    for (let i = 0; i < response.products.length; i++) {
+      const product = response.products[i];
+      
+      // Mostrar progreso cada 10 productos o en el último
+      if (i % 10 === 0 || i === totalProducts - 1) {
+        onProgress?.(`Guardando productos: ${i + 1}/${totalProducts}`);
+      }
       try {
         // ✅ Si el producto está inactivo, eliminarlo de la BD local
         if (product.isActive === false) {
@@ -152,6 +159,8 @@ export async function syncCatalog(
       }
     }
     
+    onProgress?.(`✅ ${savedCount} productos guardados, ${deletedCount} eliminados`);
+    
     console.log(`✅ Sincronización completada:`);
     console.log(`   - ${savedCount} productos guardados/actualizados`);
     console.log(`   - ${deletedCount} productos eliminados`);
@@ -207,7 +216,9 @@ export async function syncCatalog(
         if (modifiedClients.length > 0) {
           console.log(`🔄 Subiendo ${modifiedClients.length} clientes modificados...`);
           
-          for (const client of modifiedClients) {
+          for (let i = 0; i < modifiedClients.length; i++) {
+            const client = modifiedClients[i];
+            onProgress?.(`Subiendo clientes: ${i + 1}/${modifiedClients.length}`);
             try {
               await updateClientOnServer(token, client.id, {
                 name: client.name,
@@ -236,6 +247,7 @@ export async function syncCatalog(
               console.error(`❌ Error al sincronizar cliente ${client.id}:`, clientError);
             }
           }
+          onProgress?.(`✅ ${modifiedClients.length} clientes sincronizados`);
         }
       }
     } catch (uploadError) {
@@ -247,7 +259,14 @@ export async function syncCatalog(
     try {
       const clientsResponse = await getAssignedClients();
       if (clientsResponse.success && clientsResponse.clients) {
-        for (const client of clientsResponse.clients) {
+        const totalClients = clientsResponse.clients.length;
+        for (let i = 0; i < clientsResponse.clients.length; i++) {
+          const client = clientsResponse.clients[i];
+          
+          // Mostrar progreso cada 5 clientes o en el último
+          if (i % 5 === 0 || i === totalClients - 1) {
+            onProgress?.(`Descargando clientes: ${i + 1}/${totalClients}`);
+          }
           await db.runAsync(
             `INSERT OR REPLACE INTO clients 
              (id, name, email, role, companyName, companyTaxId, phone, address, gpsLocation, 
@@ -282,6 +301,7 @@ export async function syncCatalog(
             ]
           );
         }
+        onProgress?.(`✅ ${clientsResponse.clients.length} clientes descargados`);
         console.log(`✅ ${clientsResponse.clients.length} clientes sincronizados`);
       }
     } catch (clientError) {
