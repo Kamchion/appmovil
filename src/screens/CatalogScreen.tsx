@@ -902,8 +902,34 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         p.id && p.sku && p.name && (p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial)
       );
       
-      setProducts(validProducts);
-      setFilteredProducts(validProducts);
+      // ✅ FORZAR ORDENAMIENTO EN JAVASCRIPT para garantizar orden correcto
+      // Esto asegura que el orden se respete sin importar cómo SQLite devuelva los datos
+      const sortedProducts = validProducts.sort((a, b) => {
+        // Productos sin displayOrder primero
+        const aHasOrder = a.displayOrder !== null && a.displayOrder !== undefined;
+        const bHasOrder = b.displayOrder !== null && b.displayOrder !== undefined;
+        
+        if (!aHasOrder && bHasOrder) return -1;
+        if (aHasOrder && !bHasOrder) return 1;
+        
+        // Si ambos tienen displayOrder, ordenar por número
+        if (aHasOrder && bHasOrder) {
+          if (a.displayOrder !== b.displayOrder) {
+            return (a.displayOrder || 0) - (b.displayOrder || 0);
+          }
+        }
+        
+        // Si tienen el mismo displayOrder (o ambos null), ordenar alfabéticamente
+        return a.name.localeCompare(b.name);
+      });
+      
+      console.log('🔢 Productos ordenados:', sortedProducts.slice(0, 5).map(p => ({
+        name: p.name,
+        displayOrder: p.displayOrder
+      })));
+      
+      setProducts(sortedProducts);
+      setFilteredProducts(sortedProducts);
       
       console.log(`🎯 Cargados ${validProducts.length} productos`);
       
