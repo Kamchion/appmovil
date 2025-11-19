@@ -211,9 +211,12 @@ export default function DashboardHomeScreen() {
       </View>
 
       {/* Sync Progress Message */}
-      {isSyncing && syncMessage && (
+      {isSyncing && (
         <View style={styles.syncMessageContainer}>
-          <Text style={styles.syncMessageText}>{syncMessage}</Text>
+          <ActivityIndicator size="small" color="#1e40af" style={{ marginRight: 8 }} />
+          <Text style={styles.syncMessageText}>
+            {syncMessage || 'Sincronizando...'}
+          </Text>
         </View>
       )}
 
@@ -316,9 +319,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   syncMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#dbeafe',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#93c5fd',
   },
