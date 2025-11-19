@@ -1093,11 +1093,19 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             style={styles.sortMenuItem}
             onPress={async () => {
               setShowSortMenu(false);
-              await loadProducts();
+              setRefreshing(true);
+              try {
+                await loadProducts();
+                Alert.alert('✅ Éxito', 'Productos reordenados correctamente');
+              } catch (error) {
+                Alert.alert('❌ Error', 'No se pudo reordenar: ' + (error as Error).message);
+              } finally {
+                setRefreshing(false);
+              }
             }}
           >
             <Ionicons name="swap-vertical" size={20} color="#2563eb" />
-            <Text style={styles.sortMenuItemText}>Ordenar productos</Text>
+            <Text style={styles.sortMenuItemText}>Reordenar productos</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1285,8 +1293,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1000,
+    elevation: 10,
+    zIndex: 9999,
     minWidth: 200,
   },
   sortMenuItem: {
