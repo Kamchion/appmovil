@@ -867,30 +867,36 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
       }
       
       // OPTIMIZACIÓN: Consulta SQL optimizada que filtra directamente en la base de datos
+      // Usar subconsulta para garantizar que ORDER BY se respete correctamente
       const result = await db.getAllAsync<any>(
         `SELECT 
           p.*,
-          COUNT(v.id) as variantCount,
-          SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount,
-          0 as hideInCatalog,
-          p.displayOrder,
-          p.name
-         FROM products p
-         LEFT JOIN products v ON v.parentSku = p.sku AND v.isActive = 1
-         WHERE p.isActive = 1 
-         AND (p.parentSku IS NULL OR p.parentSku = '') 
-         AND (
-           p.id || p.sku || p.name
-         ) IS NOT NULL
-         GROUP BY p.sku, p.displayOrder, p.name
-         HAVING (
-           (COUNT(v.id) > 0 AND SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) > 0)
-           OR (COUNT(v.id) = 0 AND p.hideInCatalog = 0)
-         )
-         ORDER BY 
-           CASE WHEN p.displayOrder IS NULL THEN 0 ELSE 1 END,
-           p.displayOrder ASC, 
-           p.name ASC`
+          COALESCE(v.variantCount, 0) as variantCount,
+          COALESCE(v.visibleVariantCount, 0) as visibleVariantCount,
+          0 as hideInCatalog
+         FROM (
+           SELECT *
+           FROM products
+           WHERE isActive = 1 
+           AND (parentSku IS NULL OR parentSku = '')
+           ORDER BY 
+             CASE WHEN displayOrder IS NULL THEN 0 ELSE 1 END,
+             displayOrder ASC, 
+             name ASC
+         ) p
+         LEFT JOIN (
+           SELECT 
+             parentSku,
+             COUNT(*) as variantCount,
+             SUM(CASE WHEN hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount
+           FROM products
+           WHERE isActive = 1 AND parentSku IS NOT NULL AND parentSku != ''
+           GROUP BY parentSku
+         ) v ON v.parentSku = p.sku
+         WHERE (
+           (v.variantCount > 0 AND v.visibleVariantCount > 0)
+           OR (v.variantCount IS NULL AND p.hideInCatalog = 0)
+         )`
       );
       
       console.log(`✅ ${result.length} productos visibles cargados`);
