@@ -878,6 +878,7 @@ export async function incrementalSync(
     let imagesDownloaded = 0;
     
     if (productChanges.success && productChanges.products) {
+      console.log(`📦 Sincronización incremental: ${productChanges.products.length} productos cambiados`);
       for (const product of productChanges.products) {
         // Si el producto está inactivo, eliminarlo
         if (!product.isActive) {
@@ -939,13 +940,19 @@ export async function incrementalSync(
         // Descargar imagen solo si cambió
         if (imageChanged && product.image) {
           try {
+            console.log(`🖼️ Descargando imagen nueva/cambiada: ${product.name} (${product.sku})`);
             await cacheMultipleImages([product.image]);
             imagesDownloaded++;
+            onProgress?.(`Descargando imágenes: ${imagesDownloaded}`);
           } catch (error) {
             console.warn('Error al descargar imagen:', product.image);
           }
+        } else if (product.image) {
+          console.log(`✅ Imagen ya existe: ${product.name} (${product.sku})`);
         }
       }
+      
+      console.log(`📊 Resumen: ${productsUpdated} productos actualizados, ${imagesDownloaded} imágenes descargadas`);
     }
     
     // 3.5. Comparar lista local con servidor para detectar productos eliminados
