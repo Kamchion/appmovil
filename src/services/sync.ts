@@ -886,15 +886,14 @@ export async function incrementalSync(
           continue;
         }
         
-        // Verificar si la imagen cambió
+        // Verificar si la imagen cambió (solo comparar URL de imagen)
         const existingProduct = await db.getAllAsync<any>(
-          'SELECT image, updatedAt FROM products WHERE sku = ?',
+          'SELECT image FROM products WHERE sku = ?',
           [product.sku]
         );
         
         const imageChanged = existingProduct.length === 0 || 
-                            existingProduct[0].image !== product.image ||
-                            existingProduct[0].updatedAt !== product.updatedAt;
+                            existingProduct[0].image !== product.image;
         
         // Actualizar producto (usar sku como id para evitar duplicados)
         await db.runAsync(
