@@ -904,7 +904,7 @@ export async function incrementalSync(
         
         const isNewProduct = existingProduct.length === 0;
         let hasChanges = isNewProduct;
-        let imageChanged = isNewProduct;
+        let imageChanged = false; // ✅ FIX: Siempre calcular comparando, no asumir basado en isNewProduct
         
         if (!isNewProduct) {
           const existing = existingProduct[0];
