@@ -1131,10 +1131,10 @@ export async function incrementalSync(
       clientChanges?.timestamp ? new Date(clientChanges.timestamp).getTime() : 0
     );
     
-    // Si obtuvimos un timestamp válido del servidor, usarlo con margen de seguridad
-    // Restamos 2 segundos para evitar problemas de precisión de milisegundos
+    // Si obtuvimos un timestamp válido del servidor, usarlo tal cual (en UTC)
+    // No modificar el timestamp, el servidor y cliente trabajan en UTC
     const newSyncTimestamp = serverTimestamp > 0 
-      ? new Date(serverTimestamp - 2000).toISOString() // Restar 2 segundos
+      ? new Date(serverTimestamp).toISOString() // Usar tal cual, sin modificaciones
       : new Date().toISOString();
     
     await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
