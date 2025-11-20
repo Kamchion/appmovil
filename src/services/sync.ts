@@ -909,13 +909,21 @@ export async function incrementalSync(
         if (!isNewProduct) {
           const existing = existingProduct[0];
           
-          // Comparar campos clave para detectar cambios reales
+          // Función helper para normalizar valores antes de comparar
+          const normalize = (value: any): string | number | null => {
+            if (value === undefined || value === null || value === '') return null;
+            if (typeof value === 'string') return value.trim();
+            if (typeof value === 'number') return value;
+            return String(value).trim();
+          };
+          
+          // Comparar campos clave para detectar cambios reales (con normalización)
           hasChanges = 
-            existing.name !== product.name ||
-            existing.description !== (product.description || null) ||
-            existing.category !== (product.category || null) ||
-            existing.subcategory !== (product.subcategory || null) ||
-            existing.image !== (product.image || null) ||
+            normalize(existing.name) !== normalize(product.name) ||
+            normalize(existing.description) !== normalize(product.description) ||
+            normalize(existing.category) !== normalize(product.category) ||
+            normalize(existing.subcategory) !== normalize(product.subcategory) ||
+            normalize(existing.image) !== normalize(product.image) ||
             existing.basePrice !== product.basePrice ||
             existing.priceCity !== (product.priceCity || product.basePrice) ||
             existing.priceInterior !== (product.priceInterior || product.basePrice) ||
@@ -924,7 +932,7 @@ export async function incrementalSync(
             existing.displayOrder !== (product.displayOrder || null) ||
             existing.hideInCatalog !== (product.hideInCatalog ? 1 : 0);
           
-          imageChanged = existing.image !== (product.image || null);
+          imageChanged = normalize(existing.image) !== normalize(product.image);
           
           if (!hasChanges) {
             console.log(`✅ Sin cambios: ${product.name} (${product.sku})`);
@@ -981,9 +989,14 @@ export async function incrementalSync(
         if (imageChanged && product.image) {
           try {
             console.log(`🖼️ Descargando imagen nueva/cambiada: ${product.name} (${product.sku})`);
-            await cacheMultipleImages([product.image]);
-            imagesDownloaded++;
-            onProgress?.(`Descargando imágenes: ${imagesDownloaded}`);
+            const downloadResult = await cacheMultipleImages([product.image]);
+            // Solo contar si realmente se descargó (no estaba en caché)
+            if (downloadResult.success > 0) {
+              imagesDownloaded++;
+              onProgress?.(`Descargando imágenes: ${imagesDownloaded}`);
+            } else {
+              console.log(`✅ Imagen ya estaba en caché: ${product.name} (${product.sku})`);
+            }
           } catch (error) {
             console.warn('Error al descargar imagen:', product.image);
           }
@@ -1045,8 +1058,15 @@ export async function incrementalSync(
     try {
       const { getClientChanges } = require('./api');
       clientChanges = await getClientChanges(lastSync);  // ✅ Asignar en lugar de declarar
+      
+      console.log('👥 [incrementalSync] Respuesta de clientes:', {
+        success: clientChanges.success,
+        clientsCount: clientChanges.clients?.length || 0,
+        timestamp: clientChanges.timestamp
+      });
     
     if (clientChanges.success && clientChanges.clients) {
+      console.log(`👥 Sincronización incremental: ${clientChanges.clients.length} clientes cambiados`);
       for (const client of clientChanges.clients) {
         // Si el cliente fue removido (reasignado a otro vendedor)
         if (client._removed) {
@@ -1094,6 +1114,10 @@ export async function incrementalSync(
         
         clientsUpdated++;
       }
+      
+      console.log(`📊 Resumen clientes: ${clientsUpdated} clientes actualizados`);
+    } else {
+      console.log('ℹ️ No hay cambios en clientes o fallo la consulta');
     }
     } catch (error: any) {
       console.error('❌ Error al descargar cambios de clientes:', error.message);
@@ -1107,9 +1131,10 @@ export async function incrementalSync(
       clientChanges?.timestamp ? new Date(clientChanges.timestamp).getTime() : 0
     );
     
-    // Si obtuvimos un timestamp válido del servidor, usarlo; sino usar la hora actual
+    // Si obtuvimos un timestamp válido del servidor, usarlo con margen de seguridad
+    // Restamos 2 segundos para evitar problemas de precisión de milisegundos
     const newSyncTimestamp = serverTimestamp > 0 
-      ? new Date(serverTimestamp).toISOString()
+      ? new Date(serverTimestamp - 2000).toISOString() // Restar 2 segundos
       : new Date().toISOString();
     
     await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
