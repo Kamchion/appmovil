@@ -264,6 +264,14 @@ export async function initDatabase(): Promise<void> {
  */
 async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
   try {
+    // Crear tabla config si no existe
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    
     // Obtener versión actual
     const result = await database.getAllAsync<{ value: string }>(
       'SELECT value FROM config WHERE key = ?',

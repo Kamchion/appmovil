@@ -1,6 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDatabase } from '../database/db';
+import { getDatabase, initDatabase } from '../database/db';
 import { getCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
 import { getOrders } from './api-orders';
 import { updateClientOnServer } from './api-client-update';
@@ -17,6 +17,8 @@ const USER_KEY = 'vendor_user';
  */
 
 const LAST_SYNC_KEY = 'last_sync_timestamp';
+const SYNC_CHECKPOINT_KEY = 'sync_checkpoint';
+const IMAGES_CHECKPOINT_KEY = 'images_checkpoint';
 
 /**
  * Obtiene el token de autenticación guardado
@@ -42,6 +44,70 @@ export async function checkConnection(): Promise<boolean> {
 }
 
 /**
+ * Limpia el estado de la base de datos para evitar bloqueos
+ * Ejecuta una consulta simple para asegurar que la BD está lista
+ * Verifica y agrega columnas faltantes
+ */
+async function ensureDatabaseReady(): Promise<void> {
+  try {
+    const db = getDatabase();
+    
+    // Verificar que la BD responde
+    await db.getAllAsync('SELECT 1');
+    
+    // Verificar y agregar columna needsSync si no existe
+    try {
+      // Intentar consultar la columna needsSync
+      await db.getAllAsync('SELECT needsSync FROM clients LIMIT 1');
+      console.log('✅ Columna needsSync existe');
+    } catch (columnError: any) {
+      // Si la columna no existe, agregarla
+      if (columnError.message && columnError.message.includes('no such column: needsSync')) {
+        console.log('⚠️ Columna needsSync no existe, agregando...');
+        try {
+          await db.execAsync('ALTER TABLE clients ADD COLUMN needsSync INTEGER DEFAULT 0');
+          console.log('✅ Columna needsSync agregada exitosamente');
+        } catch (alterError) {
+          console.error('❌ Error al agregar columna needsSync:', alterError);
+          // No lanzar error, continuar con la sincronización
+        }
+      }
+    }
+    
+    // Verificar y agregar columna status en pending_orders si no existe
+    try {
+      // Intentar consultar la columna status
+      await db.getAllAsync('SELECT status FROM pending_orders LIMIT 1');
+      console.log('✅ Columna status existe');
+    } catch (columnError: any) {
+      // Si la columna no existe, agregarla
+      if (columnError.message && columnError.message.includes('no such column: status')) {
+        console.log('⚠️ Columna status no existe, agregando...');
+        try {
+          await db.execAsync('ALTER TABLE pending_orders ADD COLUMN status TEXT DEFAULT \'pending\'');
+          console.log('✅ Columna status agregada exitosamente');
+        } catch (alterError) {
+          console.error('❌ Error al agregar columna status:', alterError);
+          // No lanzar error, continuar con la sincronización
+        }
+      }
+    }
+    
+    console.log('✅ Base de datos lista para operaciones');
+  } catch (error: any) {
+    console.warn('⚠️ Error al verificar estado de BD:', error.message);
+    // Si hay error, intentar reinicializar
+    try {
+      await initDatabase();
+      console.log('✅ Base de datos reinicializada');
+    } catch (reinitError) {
+      console.error('❌ Error al reinicializar BD:', reinitError);
+      throw new Error('No se pudo preparar la base de datos para sincronización');
+    }
+  }
+}
+
+/**
  * Obtiene el timestamp de la última sincronización
  */
 export async function getLastSyncTimestamp(): Promise<string | null> {
@@ -56,13 +122,52 @@ async function setLastSyncTimestamp(timestamp: string): Promise<void> {
 }
 
 /**
+ * Guarda un checkpoint de sincronización
+ */
+async function saveSyncCheckpoint(checkpoint: {
+  productsProcessed: string[];
+  imagesDownloaded: string[];
+  lastProductTimestamp?: string;
+}): Promise<void> {
+  await AsyncStorage.setItem(SYNC_CHECKPOINT_KEY, JSON.stringify(checkpoint));
+}
+
+/**
+ * Obtiene el checkpoint de sincronización
+ */
+async function getSyncCheckpoint(): Promise<{
+  productsProcessed: string[];
+  imagesDownloaded: string[];
+  lastProductTimestamp?: string;
+} | null> {
+  const checkpointJson = await AsyncStorage.getItem(SYNC_CHECKPOINT_KEY);
+  return checkpointJson ? JSON.parse(checkpointJson) : null;
+}
+
+/**
+ * Limpia el checkpoint de sincronización
+ */
+async function clearSyncCheckpoint(): Promise<void> {
+  await AsyncStorage.removeItem(SYNC_CHECKPOINT_KEY);
+}
+
+/**
  * Sincroniza el catálogo de productos
  * Descarga productos del servidor y los guarda localmente
  */
 export async function syncCatalog(
   onProgress?: (message: string) => void
-): Promise<{ success: boolean; message: string; productsUpdated: number }> {
+): Promise<{
+  success: boolean;
+  message: string;
+  productsUpdated: number;
+}> {
   try {
+    // Asegurar que la base de datos está lista antes de iniciar
+    await ensureDatabaseReady();
+    
+    const db = getDatabase();
+    
     onProgress?.('Verificando conexión...');
     const isOnline = await checkConnection();
     
@@ -85,10 +190,15 @@ export async function syncCatalog(
     }
 
     onProgress?.('Guardando productos localmente...');
-    const db = getDatabase();
     const now = new Date().toISOString();
 
     console.log(`📦 Procesando ${response.products.length} productos...`);
+    
+    // Recuperar checkpoint si existe
+    const checkpoint = await getSyncCheckpoint();
+    const productsProcessed = new Set<string>(checkpoint?.productsProcessed || []);
+    
+    console.log(`💾 Checkpoint: ${productsProcessed.size} productos ya procesados`);
     
     // Guardar, actualizar o eliminar productos en la base de datos local
     let savedCount = 0;
@@ -97,6 +207,13 @@ export async function syncCatalog(
     
     for (let i = 0; i < response.products.length; i++) {
       const product = response.products[i];
+      
+      // Saltar productos ya procesados en checkpoint previo
+      if (productsProcessed.has(product.sku)) {
+        console.log(`✅ Producto ya procesado (checkpoint): ${product.name} (${product.sku})`);
+        savedCount++; // Contar como procesado
+        continue;
+      }
       
       // Mostrar progreso cada 10 productos o en el último
       if (i % 10 === 0 || i === totalProducts - 1) {
@@ -153,6 +270,19 @@ export async function syncCatalog(
         ]
       );
         savedCount++;
+        
+        // Marcar producto como procesado
+        productsProcessed.add(product.sku);
+        
+        // Guardar checkpoint cada 10 productos
+        if (productsProcessed.size % 10 === 0) {
+          await saveSyncCheckpoint({
+            productsProcessed: Array.from(productsProcessed),
+            imagesDownloaded: [],
+            timestamp: now
+          });
+          console.log(`💾 Checkpoint guardado: ${productsProcessed.size} productos`);
+        }
       } catch (insertError) {
         console.error(`❌ Error al guardar producto ${product.sku}:`, insertError);
         console.error('Datos del producto:', JSON.stringify(product, null, 2));
@@ -169,9 +299,6 @@ export async function syncCatalog(
     // Verificar que se guardaron
     const verifyCount = await db.getAllAsync('SELECT COUNT(*) as count FROM products');
     console.log(`🔍 Total de productos en BD: ${verifyCount[0]?.count || 0}`);
-
-    // Actualizar timestamp de última sincronización
-    await setLastSyncTimestamp(response.timestamp);
 
     // Sincronizar configuración de campos de producto y estilos
     onProgress?.('Sincronizando configuración de tarjetas...');
@@ -209,9 +336,30 @@ export async function syncCatalog(
     try {
       const token = await getAuthToken();
       if (token) {
-        const modifiedClients = await db.getAllAsync(
-          `SELECT * FROM clients WHERE needsSync = 1`
-        );
+        let modifiedClients: any[] = [];
+        try {
+          modifiedClients = await db.getAllAsync(
+            `SELECT * FROM clients WHERE needsSync = 1`
+          );
+        } catch (error: any) {
+          // Si la columna needsSync no existe, agregar la columna
+          if (error.message && error.message.includes('no such column: needsSync')) {
+            console.log('⚠️ Columna needsSync no existe, agregando...');
+            try {
+              await db.execAsync('ALTER TABLE clients ADD COLUMN needsSync INTEGER DEFAULT 0');
+              console.log('✅ Columna needsSync agregada');
+              modifiedClients = await db.getAllAsync(
+                `SELECT * FROM clients WHERE needsSync = 1`
+              );
+            } catch (alterError) {
+              console.error('❌ Error al agregar columna needsSync:', alterError);
+              modifiedClients = [];
+            }
+          } else {
+            console.error('❌ Error al consultar clientes:', error);
+            modifiedClients = [];
+          }
+        }
 
         if (modifiedClients.length > 0) {
           console.log(`🔄 Subiendo ${modifiedClients.length} clientes modificados...`);
@@ -371,6 +519,14 @@ export async function syncCatalog(
       // No fallar la sincronización completa si falla el historial
     }
 
+    // Actualizar timestamp de última sincronización SOLO si todo fue exitoso
+    await setLastSyncTimestamp(response.timestamp);
+    console.log('✅ Timestamp de sincronización actualizado:', response.timestamp);
+    
+    // Limpiar checkpoint al finalizar exitosamente
+    await clearSyncCheckpoint();
+    console.log('💾 Checkpoint limpiado - sincronización completa');
+
     return {
       success: true,
       message: `${response.products.length} productos actualizados`,
@@ -378,6 +534,9 @@ export async function syncCatalog(
     };
   } catch (error: any) {
     console.error('Error en syncCatalog:', error);
+    // Guardar checkpoint en caso de error para permitir reanudación
+    // El checkpoint se mantendrá para la próxima sincronización
+    console.log('⚠️ Error durante sincronización - checkpoint mantenido para reanudación');
     return {
       success: false,
       message: error.message || 'Error desconocido',
@@ -746,6 +905,9 @@ export async function fullSync(
   ordersSynced: number;
 }> {
   try {
+    // Asegurar que la base de datos está lista antes de iniciar
+    await ensureDatabaseReady();
+    
     // Primero sincronizar pedidos pendientes
     const ordersResult = await syncPendingOrders(onProgress);
     
@@ -788,11 +950,18 @@ export async function incrementalSync(
   clientsUpdated: number;
 }> {
   try {
+    // Asegurar que la base de datos está lista antes de iniciar
+    await ensureDatabaseReady();
+    
     const db = getDatabase();
     const lastSync = await getLastSyncTimestamp();
     
+    // Recuperar checkpoint si existe
+    const checkpoint = await getSyncCheckpoint();
+    
     console.log('🔄 [incrementalSync] Iniciando sincronización incremental');
     console.log('🕒 [incrementalSync] lastSync:', lastSync);
+    console.log('💾 [incrementalSync] checkpoint:', checkpoint ? 'encontrado' : 'no existe');
     
     if (!lastSync) {
       // Si no hay sincronización previa, hacer fullSync
@@ -812,9 +981,31 @@ export async function incrementalSync(
     
     // 2. Subir clientes pendientes (nuevos y modificados)
     onProgress?.('Enviando clientes pendientes...');
-    const modifiedClients = await db.getAllAsync<any>(
-      'SELECT * FROM clients WHERE needsSync = 1'
-    );
+    let modifiedClients: any[] = [];
+    try {
+      modifiedClients = await db.getAllAsync<any>(
+        'SELECT * FROM clients WHERE needsSync = 1'
+      );
+    } catch (error: any) {
+      // Si la columna needsSync no existe, agregar la columna
+      if (error.message && error.message.includes('no such column: needsSync')) {
+        console.log('⚠️ Columna needsSync no existe, agregando...');
+        try {
+          await db.execAsync('ALTER TABLE clients ADD COLUMN needsSync INTEGER DEFAULT 0');
+          console.log('✅ Columna needsSync agregada');
+          // Reintentar la consulta
+          modifiedClients = await db.getAllAsync<any>(
+            'SELECT * FROM clients WHERE needsSync = 1'
+          );
+        } catch (alterError) {
+          console.error('❌ Error al agregar columna needsSync:', alterError);
+          modifiedClients = [];
+        }
+      } else {
+        console.error('❌ Error al consultar clientes:', error);
+        modifiedClients = [];
+      }
+    }
     
     console.log(`📤 Encontrados ${modifiedClients.length} clientes pendientes de sincronización`);
     
@@ -886,13 +1077,25 @@ export async function incrementalSync(
     let productsUpdated = 0;
     let imagesDownloaded = 0;
     
+    // Tracking de progreso para checkpoints
+    const productsProcessed = new Set<string>(checkpoint?.productsProcessed || []);
+    const imagesDownloadedSet = new Set<string>(checkpoint?.imagesDownloaded || []);
+    
     if (productChanges.success && productChanges.products) {
       console.log(`📦 Sincronización incremental: ${productChanges.products.length} productos cambiados`);
+      
       for (const product of productChanges.products) {
+        // Saltar productos ya procesados en checkpoint previo
+        if (productsProcessed.has(product.sku)) {
+          console.log(`✅ Producto ya procesado (checkpoint): ${product.name} (${product.sku})`);
+          continue;
+        }
+        
         // Si el producto está inactivo, eliminarlo
         if (!product.isActive) {
           await db.runAsync('DELETE FROM products WHERE sku = ?', [product.sku]);
           productsUpdated++;
+          productsProcessed.add(product.sku);
           continue;
         }
         
@@ -984,24 +1187,37 @@ export async function incrementalSync(
         );
         
         productsUpdated++;
+        productsProcessed.add(product.sku);
         
         // Descargar imagen solo si cambió
-        if (imageChanged && product.image) {
+        if (imageChanged && product.image && !imagesDownloadedSet.has(product.image)) {
           try {
             console.log(`🖼️ Descargando imagen nueva/cambiada: ${product.name} (${product.sku})`);
             const downloadResult = await cacheMultipleImages([product.image]);
             // Solo contar si realmente se descargó (no estaba en caché)
             if (downloadResult.success > 0) {
               imagesDownloaded++;
+              imagesDownloadedSet.add(product.image);
               onProgress?.(`Descargando imágenes: ${imagesDownloaded}`);
             } else {
               console.log(`✅ Imagen ya estaba en caché: ${product.name} (${product.sku})`);
+              imagesDownloadedSet.add(product.image);
             }
           } catch (error) {
             console.warn('Error al descargar imagen:', product.image);
           }
         } else if (product.image) {
           console.log(`✅ Imagen ya existe: ${product.name} (${product.sku})`);
+        }
+        
+        // Guardar checkpoint cada 10 productos procesados
+        if (productsProcessed.size % 10 === 0) {
+          await saveSyncCheckpoint({
+            productsProcessed: Array.from(productsProcessed),
+            imagesDownloaded: Array.from(imagesDownloadedSet),
+            lastProductTimestamp: product.updatedAt,
+          });
+          console.log(`💾 Checkpoint guardado: ${productsProcessed.size} productos procesados`);
         }
       }
       
@@ -1124,7 +1340,7 @@ export async function incrementalSync(
       // Continuar aunque falle la descarga de clientes
     }
     
-    // ✅ CORRECCIÓN CRÍTICA: Usar el timestamp del servidor, no new Date()
+    // ✅ CORRECCIÓN CRÍTICA: Guardar timestamp SOLO al final si todo fue exitoso
     // Esto asegura que la próxima sincronización pida cambios desde el momento correcto
     const serverTimestamp = Math.max(
       productChanges.timestamp ? new Date(productChanges.timestamp).getTime() : 0,
@@ -1137,12 +1353,17 @@ export async function incrementalSync(
       ? new Date(serverTimestamp).toISOString() // Usar tal cual, sin modificaciones
       : new Date().toISOString();
     
+    // Actualizar timestamp SOLO si toda la sincronización fue exitosa
     await AsyncStorage.setItem(LAST_SYNC_KEY, newSyncTimestamp);
     console.log('✅ [incrementalSync] Timestamp actualizado:', {
       anterior: lastSync,
       nuevo: newSyncTimestamp,
       serverTimestamp: serverTimestamp > 0 ? new Date(serverTimestamp).toISOString() : 'N/A'
     });
+    
+    // Limpiar checkpoint al finalizar exitosamente
+    await clearSyncCheckpoint();
+    console.log('🧹 Checkpoint limpiado - sincronización completada');
     
     const message = `${productsUpdated} productos, ${clientsUpdated} clientes, ${imagesDownloaded} imágenes actualizadas`;
     
@@ -1157,6 +1378,9 @@ export async function incrementalSync(
     };
   } catch (error: any) {
     console.error('Error en incrementalSync:', error);
+    console.log('⚠️ Sincronización interrumpida - checkpoint guardado para reanudar');
+    // El checkpoint ya está guardado, no necesitamos hacer nada más
+    // En la próxima sincronización se reanudará desde donde se quedó
     return {
       success: false,
       message: error.message || 'Error desconocido',

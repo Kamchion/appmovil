@@ -40,7 +40,20 @@ export default function App() {
 
   useEffect(() => {
     initializeApp();
-  }, []);
+    
+    // Verificar token cada 5 segundos para detectar si fue borrado por error 401
+    const tokenCheckInterval = setInterval(async () => {
+      const token = await AsyncStorage.getItem('vendor_token');
+      if (!token && isLoggedIn) {
+        console.log('⚠️ Token no encontrado, cerrando sesión...');
+        setIsLoggedIn(false);
+      }
+    }, 5000);
+    
+    return () => {
+      clearInterval(tokenCheckInterval);
+    };
+  }, [isLoggedIn]);
 
   const initializeApp = async () => {
     try {
@@ -130,58 +143,28 @@ export default function App() {
     setMenuVisible(true);
   };
 
-  const handleSyncAll = async () => {
+  const handleResetData = async () => {
     setMenuVisible(false);
     Alert.alert(
-      'Sincronizar Todo',
-      'Esto descargará toda la base de datos, fotos y pedidos nuevamente. ¿Continuar?',
+      '🔄 Reset de Datos',
+      'Esto eliminará TODOS los datos locales (productos, clientes, pedidos) y los volverá a descargar del servidor.\n\nLas imágenes en caché se conservarán para ahorrar tiempo y datos.\n\n¿Continuar?',
       [
         {
           text: 'Cancelar',
           style: 'cancel',
         },
         {
-          text: 'Sincronizar',
-          onPress: async () => {
-            try {
-              const { fullSync } = await import('./src/services/sync');
-              const result = await fullSync(() => {});
-              if (result.success) {
-                Alert.alert('Éxito', 'Sincronización completa exitosa');
-              } else {
-                Alert.alert('Error', result.message);
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Error al sincronizar');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDeleteAll = async () => {
-    setMenuVisible(false);
-    Alert.alert(
-      'Confirmar',
-      '¿Está seguro que desea borrar todos los datos locales? Esta acción no se puede deshacer.',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Borrar Todo',
+          text: 'Reset y Sincronizar',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🗑️ Iniciando borrado de datos...');
+              console.log('🔄 Iniciando reset de datos...');
               
               // Importar AsyncStorage
               const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
               
               // 1. Borrar todos los datos de la base de datos
-              console.log('1/4 Borrando datos de la base de datos...');
+              console.log('1/3 Borrando datos de la base de datos...');
               const { getDatabase } = await import('./src/database/db');
               const db = getDatabase();
               await db.execAsync('DELETE FROM pending_orders');
@@ -192,10 +175,12 @@ export default function App() {
               await db.execAsync('DELETE FROM clients');
               console.log('✅ Datos de BD eliminados');
               
-              // 2. Borrar timestamps de sincronización (IMPORTANTE para que funcione sync incremental)
-              console.log('2/3 Limpiando timestamp de sincronización...');
+              // 2. Borrar timestamps de sincronización y checkpoints
+              console.log('2/3 Limpiando timestamps y checkpoints...');
               await AsyncStorage.removeItem('last_sync_timestamp');
-              console.log('✅ Timestamp limpiado');
+              await AsyncStorage.removeItem('sync_checkpoint');
+              await AsyncStorage.removeItem('images_checkpoint');
+              console.log('✅ Timestamps limpiados');
               
               // 3. Borrar otros datos de sesión (carrito, cliente seleccionado, etc.)
               console.log('3/3 Limpiando datos de sesión...');
@@ -205,17 +190,43 @@ export default function App() {
               await AsyncStorage.removeItem('editingOrderId');
               console.log('✅ Datos de sesión limpiados');
               
-              console.log('✅ Todos los datos han sido eliminados exitosamente');
-              Alert.alert('✅ Éxito', 'Todos los datos han sido eliminados.\n\nAhora usa "Sincronizar" para descargar los datos nuevamente.');
+              // NOTA: NO borramos el caché de imágenes (FileSystem)
+              console.log('ℹ️ Imágenes en caché conservadas');
+              
+              console.log('✅ Reset completado, iniciando sincronización...');
+              
+              // 4. Ejecutar sincronización completa
+              const { fullSync } = await import('./src/services/sync');
+              const result = await fullSync(() => {});
+              
+              if (result.success) {
+                Alert.alert(
+                  '✅ Reset Exitoso',
+                  `Datos descargados:\n${result.productsUpdated} productos\n${result.ordersSynced} pedidos sincronizados\n\nLas imágenes en caché se reutilizaron.`,
+                  [{ text: 'OK' }]
+                );
+              } else {
+                Alert.alert(
+                  '⚠️ Reset Parcial',
+                  `Datos eliminados pero hubo un error en la sincronización:\n${result.message}\n\nIntenta sincronizar manualmente.`,
+                  [{ text: 'OK' }]
+                );
+              }
             } catch (error: any) {
-              console.error('❌ Error al borrar datos:', error);
-              Alert.alert('❌ Error', 'No se pudieron borrar los datos: ' + (error.message || 'Error desconocido'));
+              console.error('❌ Error en reset:', error);
+              Alert.alert(
+                '❌ Error',
+                'Error durante el reset: ' + (error.message || 'Error desconocido'),
+                [{ text: 'OK' }]
+              );
             }
           },
         },
       ]
     );
   };
+
+  // Función handleDeleteAll eliminada - reemplazada por handleResetData
 
   const handleExitApp = () => {
     setMenuVisible(false);
@@ -265,9 +276,9 @@ export default function App() {
           <View style={styles.menuModal}>
             <TouchableOpacity 
               style={styles.menuButton}
-              onPress={handleSyncAll}
+              onPress={handleResetData}
             >
-              <Text style={styles.menuButtonText}>Sincronizar Todo</Text>
+              <Text style={styles.menuButtonText}>🔄 Reset de Datos</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -281,13 +292,6 @@ export default function App() {
               }}
             >
               <Text style={styles.menuButtonText}>📋 Ver Logs</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.menuButton, styles.deleteButton]}
-              onPress={handleDeleteAll}
-            >
-              <Text style={styles.menuButtonText}>Borrar Todo</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 

@@ -102,6 +102,16 @@ async function trpcQuery<T>(
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ tRPC Error:', response.status, errorText);
+    
+    // Si es error 401, el token expiró o es inválido
+    if (response.status === 401) {
+      console.error('❌ Token expirado o inválido, cerrando sesión...');
+      // Borrar token para forzar login
+      await AsyncStorage.removeItem('vendor_token');
+      await AsyncStorage.removeItem('vendor_user');
+      throw new Error('UNAUTHORIZED');
+    }
+    
     throw new Error(`Error HTTP ${response.status}: ${errorText}`);
   }
 
@@ -136,6 +146,16 @@ async function trpcMutation<T>(
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ tRPC Mutation Error:', response.status, errorText);
+    
+    // Si es error 401, el token expiró o es inválido
+    if (response.status === 401) {
+      console.error('❌ Token expirado o inválido, cerrando sesión...');
+      // Borrar token para forzar login
+      await AsyncStorage.removeItem('vendor_token');
+      await AsyncStorage.removeItem('vendor_user');
+      throw new Error('UNAUTHORIZED');
+    }
+    
     throw new Error(`Error HTTP ${response.status}: ${errorText}`);
   }
 
@@ -215,6 +235,16 @@ export async function getCatalog(
   if (!response.ok) {
     const errorText = await response.text();
     console.error('❌ Error getCatalog:', response.status, errorText);
+    
+    // Si es error 401, el token expiró o es inválido
+    if (response.status === 401) {
+      console.error('❌ Token expirado o inválido, cerrando sesión...');
+      // Borrar token para forzar login
+      await AsyncStorage.removeItem('vendor_token');
+      await AsyncStorage.removeItem('vendor_user');
+      throw new Error('UNAUTHORIZED');
+    }
+    
     throw new Error(`HTTP error! status: ${response.status}`);
   }
 

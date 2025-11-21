@@ -152,16 +152,31 @@ export async function getCachedImagePath(imageUrl: string | null): Promise<strin
 export async function cacheMultipleImages(
   imageUrls: string[],
   onProgress?: (current: number, total: number) => void
-): Promise<{ success: number; failed: number }> {
+): Promise<{ success: number; failed: number; alreadyCached: number }> {
   let success = 0;
   let failed = 0;
+  let alreadyCached = 0;
 
   console.log(`📦 Iniciando descarga de ${imageUrls.length} imágenes...`);
+
+  // Obtener índice de caché una sola vez
+  const index = await getCacheIndex();
 
   for (let i = 0; i < imageUrls.length; i++) {
     const url = imageUrls[i];
     onProgress?.(i + 1, imageUrls.length);
 
+    // Verificar si ya está cacheada ANTES de intentar descargar
+    if (index[url]) {
+      const fileInfo = await FileSystem.getInfoAsync(index[url].localPath);
+      if (fileInfo.exists) {
+        alreadyCached++;
+        console.log(`💾 Imagen ya cacheada (${i + 1}/${imageUrls.length}): ${url}`);
+        continue;
+      }
+    }
+
+    // Solo descargar si no está en caché
     const result = await cacheImage(url);
     if (result) {
       success++;
@@ -170,10 +185,10 @@ export async function cacheMultipleImages(
     }
   }
 
-  console.log(`✅ Descarga completada: ${success} exitosas, ${failed} fallidas`);
+  console.log(`✅ Descarga completada: ${success} nuevas, ${alreadyCached} ya cacheadas, ${failed} fallidas`);
   console.log(`💾 Directorio de caché: ${IMAGE_CACHE_DIR}`);
 
-  return { success, failed };
+  return { success, failed, alreadyCached };
 }
 
 /**
