@@ -415,6 +415,18 @@ export async function syncCatalog(
           if (i % 5 === 0 || i === totalClients - 1) {
             onProgress?.(`Descargando clientes: ${i + 1}/${totalClients}`);
           }
+          
+          // Verificar si el cliente existe localmente y tiene gpsLocation
+          const existingClient = await db.getFirstAsync<any>(
+            'SELECT gpsLocation FROM clients WHERE id = ?',
+            [client.id]
+          );
+          
+          // Si el cliente local tiene gpsLocation y el del servidor no, preservar el local
+          const gpsToUse = (existingClient?.gpsLocation && !client.gpsLocation) 
+            ? existingClient.gpsLocation 
+            : (client.gpsLocation || null);
+          
           await db.runAsync(
             `INSERT OR REPLACE INTO clients 
              (id, name, email, role, companyName, companyTaxId, phone, address, gpsLocation, 
@@ -430,7 +442,7 @@ export async function syncCatalog(
               client.companyTaxId || null,
               client.phone || null,
               client.address || null,
-              client.gpsLocation || null,
+              gpsToUse,
               client.city || null,
               client.state || null,
               client.zipCode || null,
@@ -1046,6 +1058,8 @@ export async function incrementalSync(
             address: client.address,
             companyName: client.companyName,
             companyTaxId: client.companyTaxId,
+            gpsLocation: client.gpsLocation,
+            priceType: client.priceType,
           });
         }
         
@@ -1291,6 +1305,17 @@ export async function incrementalSync(
           continue;
         }
         
+        // Verificar si el cliente existe localmente y tiene gpsLocation
+        const existingClient = await db.getFirstAsync<any>(
+          'SELECT gpsLocation FROM clients WHERE id = ?',
+          [client.id]
+        );
+        
+        // Si el cliente local tiene gpsLocation y el del servidor no, preservar el local
+        const gpsToUse = (existingClient?.gpsLocation && !client.gpsLocation) 
+          ? existingClient.gpsLocation 
+          : (client.gpsLocation || null);
+        
         // Actualizar o insertar cliente
         await db.runAsync(
           `INSERT OR REPLACE INTO clients 
@@ -1308,7 +1333,7 @@ export async function incrementalSync(
             client.companyTaxId || '',
             client.phone || '',
             client.address || '',
-            client.gpsLocation || null,
+            gpsToUse,
             client.city || '',
             client.state || '',
             client.zipCode || '',
