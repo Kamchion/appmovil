@@ -44,6 +44,9 @@ export default function PedidosScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [showClientDialog, setShowClientDialog] = useState(true);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [showGpsDialog, setShowGpsDialog] = useState(false);
+  const [selectedClientForGps, setSelectedClientForGps] = useState<Client | null>(null);
+  const [gpsLocationInput, setGpsLocationInput] = useState('');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -105,18 +108,38 @@ export default function PedidosScreen({ navigation }: any) {
     try {
       console.log('👤 Cliente seleccionado:', client.id, client.companyName);
       
+      // Verificar si el cliente tiene ubicación GPS
+      if (!client.gpsLocation || client.gpsLocation.trim() === '') {
+        console.log('⚠️ Cliente sin ubicación GPS, mostrando diálogo');
+        setSelectedClientForGps(client);
+        setGpsLocationInput('');
+        setShowGpsDialog(true);
+        return;
+      }
+      
+      // Si tiene GPS, continuar normalmente
+      await proceedToCatalog(client);
+    } catch (error) {
+      console.error('❌ Error al seleccionar cliente:', error);
+      Alert.alert('Error', 'No se pudo seleccionar el cliente');
+    }
+  };
+
+  const proceedToCatalog = async (client: Client) => {
+    try {
       // Guardar cliente seleccionado en AsyncStorage
       await AsyncStorage.setItem('selectedClientId', client.id);
       await AsyncStorage.setItem('selectedClientData', JSON.stringify(client));
       
-      // Cerrar diálogo
+      // Cerrar diálogos
       setShowClientDialog(false);
+      setShowGpsDialog(false);
       
-      // Navegar al catálogo directamente sin pop-up
+      // Navegar al catálogo
       navigation.navigate('CatalogTabs');
     } catch (error) {
-      console.error('❌ Error al seleccionar cliente:', error);
-      Alert.alert('Error', 'No se pudo seleccionar el cliente');
+      console.error('❌ Error al proceder al catálogo:', error);
+      throw error;
     }
   };
 
@@ -146,6 +169,66 @@ export default function PedidosScreen({ navigation }: any) {
     } finally {
       setIsGettingLocation(false);
     }
+  };
+
+  const handleGetGpsForClient = async () => {
+    try {
+      setIsGettingLocation(true);
+      
+      // Solicitar permisos
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso denegado', 'Se necesita permiso de ubicación para obtener las coordenadas GPS');
+        setIsGettingLocation(false);
+        return;
+      }
+
+      // Obtener ubicación actual
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const gpsString = `${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`;
+      setGpsLocationInput(gpsString);
+      Alert.alert('Éxito', 'Ubicación obtenida correctamente');
+    } catch (error) {
+      console.error('Error al obtener ubicación:', error);
+      Alert.alert('Error', 'No se pudo obtener la ubicación');
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
+
+  const handleSaveGpsLocation = async () => {
+    if (!selectedClientForGps) return;
+
+    try {
+      const db = getDatabase();
+      
+      // Actualizar ubicación GPS del cliente
+      await db.runAsync(
+        'UPDATE clients SET gpsLocation = ?, modifiedAt = ?, needsSync = 1 WHERE id = ?',
+        [gpsLocationInput, new Date().toISOString(), selectedClientForGps.id]
+      );
+
+      console.log('✅ Ubicación GPS guardada para cliente:', selectedClientForGps.id);
+      
+      // Actualizar el cliente con la nueva ubicación
+      const updatedClient = { ...selectedClientForGps, gpsLocation: gpsLocationInput };
+      
+      // Proceder al catálogo
+      await proceedToCatalog(updatedClient);
+    } catch (error) {
+      console.error('❌ Error al guardar ubicación GPS:', error);
+      Alert.alert('Error', 'No se pudo guardar la ubicación GPS');
+    }
+  };
+
+  const handleCancelGpsDialog = async () => {
+    if (!selectedClientForGps) return;
+    
+    // Continuar al catálogo sin guardar GPS
+    await proceedToCatalog(selectedClientForGps);
   };
 
   const handleCreateClient = async () => {
@@ -560,6 +643,64 @@ export default function PedidosScreen({ navigation }: any) {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Modal para capturar ubicación GPS */}
+      <Modal
+        visible={showGpsDialog}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowGpsDialog(false)}
+      >
+        <View style={styles.gpsModalOverlay}>
+          <View style={styles.gpsModalContent}>
+            <Text style={styles.gpsModalTitle}>Ubicación GPS</Text>
+            <Text style={styles.gpsModalSubtitle}>
+              {selectedClientForGps?.companyName}
+            </Text>
+            <Text style={styles.gpsModalDescription}>
+              Este cliente no tiene ubicación GPS registrada. Puedes agregarla ahora o continuar sin ella.
+            </Text>
+
+            <View style={styles.gpsInputContainer}>
+              <TextInput
+                style={styles.gpsInput}
+                value={gpsLocationInput}
+                onChangeText={setGpsLocationInput}
+                placeholder="Ej: 9.123456, -79.123456"
+                placeholderTextColor="#94a3b8"
+                keyboardType="default"
+              />
+              <TouchableOpacity
+                style={styles.gpsLocationButton}
+                onPress={handleGetGpsForClient}
+                disabled={isGettingLocation}
+              >
+                <Ionicons
+                  name={isGettingLocation ? "hourglass-outline" : "location"}
+                  size={24}
+                  color="#ffffff"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.gpsModalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonOutline, { flex: 1 }]}
+                onPress={handleCancelGpsDialog}
+              >
+                <Text style={styles.buttonOutlineText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonPrimary, { flex: 1 }]}
+                onPress={handleSaveGpsLocation}
+                disabled={!gpsLocationInput.trim()}
+              >
+                <Text style={styles.buttonPrimaryText}>Aceptar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -814,5 +955,70 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  gpsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  gpsModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  gpsModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  gpsModalSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2563eb',
+    marginBottom: 12,
+  },
+  gpsModalDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  gpsInputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  gpsInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1e293b',
+    backgroundColor: '#f8fafc',
+  },
+  gpsLocationButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gpsModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
   },
 });
