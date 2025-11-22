@@ -1053,6 +1053,7 @@ export async function incrementalSync(
           console.log(`🔄 Actualizando cliente existente: ${client.companyName}`);
           await updateClientOnServer(token, client.clientNumber, {
             name: client.name,
+            contactPerson: client.contactPerson || client.name,
             email: client.email,
             phone: client.phone,
             address: client.address,
