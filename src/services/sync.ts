@@ -1052,15 +1052,15 @@ export async function incrementalSync(
           // Cliente existente modificado - usar updateClientOnServer
           console.log(`🔄 Actualizando cliente existente: ${client.companyName}`);
           await updateClientOnServer(token, client.clientNumber, {
-            name: client.name,
-            contactPerson: client.contactPerson || client.name,
-            email: client.email,
-            phone: client.phone,
-            address: client.address,
-            companyName: client.companyName,
-            companyTaxId: client.companyTaxId,
-            gpsLocation: client.gpsLocation,
-            priceType: client.priceType,
+            name: client.name || undefined,
+            contactPerson: client.contactPerson || client.name || undefined,
+            email: client.email || undefined,
+            phone: client.phone || undefined,
+            address: client.address || undefined,
+            companyName: client.companyName || undefined,
+            companyTaxId: client.companyTaxId || undefined,
+            gpsLocation: client.gpsLocation || undefined,
+            priceType: client.priceType || undefined,
           });
         }
         
